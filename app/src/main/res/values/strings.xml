@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">REWIFI</string>
+    <string name="scan_widget_description">One-tap WiFi QR scanner</string>
+</resources>

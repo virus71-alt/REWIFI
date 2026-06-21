@@ -94,7 +94,7 @@ fun DetailScreen(
 
         Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 30.sp, color = Ink, maxLines = 2)
 
-        // QR — scan with phone camera to join instantly (the "restore" for non-root)
+        // QR — scan with phone camera to join instantly (the "restore" path)
         BrutalCard(Modifier.fillMaxWidth(), bg = Snow, padding = PaddingValues(20.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text("SCAN TO CONNECT", fontWeight = FontWeight.Black, fontSize = 13.sp,

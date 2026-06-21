@@ -44,14 +44,9 @@ again.
 
 ## 📱 Why it's a *manual* vault
 
-Android does **not** allow a non-root app to read the system's saved WiFi
-passwords. So REWIFI is a vault you fill once (by typing a network, or scanning
-its QR):
-
-| Mode | Behaviour |
-|------|-----------|
-| **Non-root** (current) | Manual entry / QR scan + QR / NFC / reveal-copy to reconnect |
-| **Root** (planned) | Auto-read existing passwords + auto-reconnect — kept as an isolated module so the Play Store build stays policy-safe |
+Android does **not** allow an app to read the system's saved WiFi passwords. So
+REWIFI is a vault you fill once — by typing a network or scanning its QR — and
+then reconnect from anywhere via QR, NFC, or reveal-and-copy.
 
 ---
 
@@ -121,7 +116,6 @@ ScanWidgetProvider / ScanTileService   Home-screen widget + Quick Settings tile
 
 - [x] Google Drive sync (auto + daily background worker).
 - [x] Scan-to-connect and NFC sharing.
-- [ ] Root module: auto-read + auto-connect on rooted devices.
 - [ ] Search / filter as the list grows.
 - [ ] App-specific PIN in addition to device credential.
 

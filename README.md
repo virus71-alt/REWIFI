@@ -130,4 +130,6 @@ always encrypted before they leave the device.
 
 ## 📄 License
 
-Add a license of your choice (MIT recommended for open source) before publishing.
+[MIT](LICENSE) © Rahul Singh. Permissive — anyone may rebuild, modify, and
+redistribute. If you rebuild your own copy, you must register your own Google
+OAuth client (your package + signing SHA-1) for Drive sync to work.

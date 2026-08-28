@@ -1,0 +1,33 @@
+# Built application files / build output
+*.apk
+*.aar
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+build/
+.gradle/
+.cxx/
+
+# Local config
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+
+# Keystore / signing — NEVER commit these
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

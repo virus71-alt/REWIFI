@@ -17,14 +17,14 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.rewifi.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.rewifi.app"
         minSdk = 28          // Android 9
-        targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        targetSdk = 36
+        versionCode = 4
+        versionName = "1.0.2"
         vectorDrawables { useSupportLibrary = true }
     }
 

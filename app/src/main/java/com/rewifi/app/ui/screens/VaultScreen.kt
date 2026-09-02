@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,11 +86,14 @@ fun VaultScreen(
     searchQuery: String,
     filter: VaultFilter,
     sort: VaultSort,
+    categoryFilter: String,
+    allCategories: List<String>,
     syncState: SyncState,
     flash: Flash?,
     onSearchQueryChange: (String) -> Unit,
     onFilterChange: (VaultFilter) -> Unit,
     onSortChange: (VaultSort) -> Unit,
+    onCategoryFilterChange: (String) -> Unit,
     onClearFilters: () -> Unit,
     onToggleFavorite: (WifiCred) -> Unit,
     onAdd: () -> Unit,
@@ -101,7 +105,7 @@ fun VaultScreen(
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
     val colors = RewifiTheme.colors
-    val isFiltered = searchQuery.isNotBlank() || filter != VaultFilter.ALL
+    val isFiltered = searchQuery.isNotBlank() || filter != VaultFilter.ALL || !categoryFilter.equals("ALL", ignoreCase = true)
 
     Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         LazyColumn(
@@ -127,9 +131,12 @@ fun VaultScreen(
                         searchQuery = searchQuery,
                         filter = filter,
                         sort = sort,
+                        categoryFilter = categoryFilter,
+                        allCategories = allCategories,
                         onSearchQueryChange = onSearchQueryChange,
                         onFilterChange = onFilterChange,
                         onSortChange = onSortChange,
+                        onCategoryFilterChange = onCategoryFilterChange,
                         onClearFilters = onClearFilters
                     )
                 }
@@ -194,14 +201,18 @@ private fun SearchBarAndFilterControls(
     searchQuery: String,
     filter: VaultFilter,
     sort: VaultSort,
+    categoryFilter: String,
+    allCategories: List<String>,
     onSearchQueryChange: (String) -> Unit,
     onFilterChange: (VaultFilter) -> Unit,
     onSortChange: (VaultSort) -> Unit,
+    onCategoryFilterChange: (String) -> Unit,
     onClearFilters: () -> Unit
 ) {
     val colors = RewifiTheme.colors
     var showPanel by remember { mutableStateOf(false) }
-    val isFilterActive = filter != VaultFilter.ALL || sort != VaultSort.NAME_AZ
+    val isCategoryActive = !categoryFilter.equals("ALL", ignoreCase = true)
+    val isFilterActive = filter != VaultFilter.ALL || sort != VaultSort.NAME_AZ || isCategoryActive
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // Search bar row
@@ -233,10 +244,11 @@ private fun SearchBarAndFilterControls(
                     Box(Modifier.weight(1f)) {
                         if (searchQuery.isEmpty()) {
                             Text(
-                                "Search SSID, note...",
+                                "Search SSID, notes, category…",
                                 color = colors.textSecondary,
                                 fontSize = 14.sp,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                         BasicTextField(
@@ -284,6 +296,29 @@ private fun SearchBarAndFilterControls(
             }
         }
 
+        // Quick Category Chip Bar
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            item {
+                FilterChip(
+                    label = "ALL",
+                    selected = categoryFilter.equals("ALL", ignoreCase = true)
+                ) {
+                    onCategoryFilterChange("ALL")
+                }
+            }
+            items(allCategories) { cat ->
+                FilterChip(
+                    label = cat.uppercase(),
+                    selected = categoryFilter.equals(cat, ignoreCase = true)
+                ) {
+                    onCategoryFilterChange(cat)
+                }
+            }
+        }
+
         // Animated options panel
         AnimatedVisibility(
             visible = showPanel,
@@ -292,7 +327,34 @@ private fun SearchBarAndFilterControls(
         ) {
             BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Filter row
+                    // Category row in panel
+                    Column {
+                        Text(
+                            "CATEGORY",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = colors.textSecondary,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            item {
+                                FilterChip("ALL", categoryFilter.equals("ALL", ignoreCase = true)) {
+                                    onCategoryFilterChange("ALL")
+                                }
+                            }
+                            items(allCategories) { cat ->
+                                FilterChip(cat.uppercase(), categoryFilter.equals(cat, ignoreCase = true)) {
+                                    onCategoryFilterChange(cat)
+                                }
+                            }
+                        }
+                    }
+
+                    // Security Filter row
                     Column {
                         Text(
                             "FILTER NETWORKS",
@@ -361,6 +423,7 @@ private fun SearchBarAndFilterControls(
                                     .clickable {
                                         onClearFilters()
                                         onSortChange(VaultSort.NAME_AZ)
+                                        onCategoryFilterChange("ALL")
                                     }
                                     .padding(4.dp)
                             )
@@ -593,7 +656,25 @@ private fun WifiRow(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(c.ssid, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = colors.textPrimary, maxLines = 1)
-                Text("•••••••••", color = colors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("•••••••••", color = colors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.surfaceVariant)
+                            .border(1.5.dp, colors.border.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            c.category.uppercase(),
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
             }
             Spacer(Modifier.width(8.dp))
             // Pin / Favorite action button

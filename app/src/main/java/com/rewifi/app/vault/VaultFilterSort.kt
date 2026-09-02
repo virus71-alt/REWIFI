@@ -26,6 +26,7 @@ object VaultFilterSort {
         query: String,
         filter: VaultFilter,
         sort: VaultSort,
+        categoryFilter: String = "ALL",
         updatedMap: Map<Long, Long> = emptyMap()
     ): List<WifiCred> {
         val q = query.trim().lowercase()
@@ -35,7 +36,8 @@ object VaultFilterSort {
                 if (q.isNotEmpty()) {
                     val matchesSsid = cred.ssid.lowercase().contains(q)
                     val matchesNote = cred.note?.lowercase()?.contains(q) == true
-                    matchesSsid || matchesNote
+                    val matchesCategory = cred.category.lowercase().contains(q)
+                    matchesSsid || matchesNote || matchesCategory
                 } else {
                     true
                 }
@@ -46,6 +48,13 @@ object VaultFilterSort {
                     VaultFilter.ALL -> true
                     VaultFilter.OPEN -> isOpen
                     VaultFilter.SECURED -> !isOpen
+                }
+            }
+            .filter { cred ->
+                if (categoryFilter.equals("ALL", ignoreCase = true)) {
+                    true
+                } else {
+                    cred.category.equals(categoryFilter, ignoreCase = true)
                 }
             }
             .sortedWith { a, b ->

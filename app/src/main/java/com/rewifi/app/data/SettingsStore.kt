@@ -7,6 +7,7 @@ import com.rewifi.app.vault.VaultSort
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -38,6 +39,12 @@ class SettingsStore(context: Context) {
         }.getOrDefault(VaultFilter.ALL)
     )
     val vaultFilter: StateFlow<VaultFilter> = _vaultFilter.asStateFlow()
+
+    private val _categoryFilter = MutableStateFlow("ALL")
+    val categoryFilter: StateFlow<String> = _categoryFilter.asStateFlow()
+
+    private val _customCategories = MutableStateFlow(loadCustomCategories())
+    val customCategories: StateFlow<List<String>> = _customCategories.asStateFlow()
 
     private val _updatedAtMap = MutableStateFlow(loadUpdatedMap())
     val updatedAtMap: StateFlow<Map<Long, Long>> = _updatedAtMap.asStateFlow()
@@ -87,6 +94,74 @@ class SettingsStore(context: Context) {
     fun setVaultFilter(filter: VaultFilter) {
         prefs.edit { putString(KEY_VAULT_FILTER, filter.name) }
         _vaultFilter.value = filter
+    }
+
+    fun setCategoryFilter(category: String) {
+        _categoryFilter.value = category
+    }
+
+    fun allCategories(): List<String> {
+        val list = mutableListOf<String>()
+        list.addAll(BUILTIN_CATEGORIES)
+        _customCategories.value.forEach { custom ->
+            if (list.none { it.equals(custom, ignoreCase = true) }) {
+                list.add(custom)
+            }
+        }
+        return list
+    }
+
+    private fun loadCustomCategories(): List<String> {
+        val raw = prefs.getString(KEY_CUSTOM_CATEGORIES, null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val name = arr.getString(i).trim()
+                if (name.isNotEmpty() && BUILTIN_CATEGORIES.none { it.equals(name, ignoreCase = true) }) {
+                    list.add(name)
+                }
+            }
+            list
+        }.getOrDefault(emptyList())
+    }
+
+    private fun saveCustomCategories(list: List<String>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(it) }
+        prefs.edit { putString(KEY_CUSTOM_CATEGORIES, arr.toString()) }
+        _customCategories.value = list
+    }
+
+    fun addCustomCategory(name: String): Boolean {
+        val clean = name.trim()
+        if (clean.isBlank()) return false
+        if (BUILTIN_CATEGORIES.any { it.equals(clean, ignoreCase = true) }) return false
+        if (_customCategories.value.any { it.equals(clean, ignoreCase = true) }) return false
+        val updated = _customCategories.value + clean
+        saveCustomCategories(updated)
+        return true
+    }
+
+    fun renameCustomCategory(oldName: String, newName: String): Boolean {
+        val clean = newName.trim()
+        if (clean.isBlank()) return false
+        if (BUILTIN_CATEGORIES.any { it.equals(clean, ignoreCase = true) }) return false
+        if (_customCategories.value.any { it.equals(clean, ignoreCase = true) && !it.equals(oldName, ignoreCase = true) }) return false
+        val updated = _customCategories.value.map { if (it.equals(oldName, ignoreCase = true)) clean else it }
+        saveCustomCategories(updated)
+        if (_categoryFilter.value.equals(oldName, ignoreCase = true)) {
+            _categoryFilter.value = clean
+        }
+        return true
+    }
+
+    fun deleteCustomCategory(name: String) {
+        val updated = _customCategories.value.filterNot { it.equals(name, ignoreCase = true) }
+        saveCustomCategories(updated)
+        if (_categoryFilter.value.equals(name, ignoreCase = true)) {
+            _categoryFilter.value = "ALL"
+        }
     }
 
     private fun loadUpdatedMap(): Map<Long, Long> {
@@ -161,11 +236,13 @@ class SettingsStore(context: Context) {
     }
 
     companion object {
+        val BUILTIN_CATEGORIES = listOf("Home", "Work", "Cafe", "Hotel", "Friends", "Other")
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
         private const val KEY_APP_THEME = "app_theme"
         private const val KEY_VAULT_SORT = "vault_sort"
         private const val KEY_VAULT_FILTER = "vault_filter"
+        private const val KEY_CUSTOM_CATEGORIES = "custom_categories"
         private const val KEY_UPDATED_MAP = "vault_updated_map"
         private const val KEY_APP_LOCK = "app_lock_enabled"
         private const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"

@@ -522,6 +522,8 @@ class MainActivity : FragmentActivity() {
                     val searchQuery by vm.searchQuery.collectAsState()
                     val filter by vm.vaultFilter.collectAsState()
                     val sort by vm.vaultSort.collectAsState()
+                    val categoryFilter by vm.categoryFilter.collectAsState()
+                    val customCategories by vm.customCategories.collectAsState()
 
                     VaultScreen(
                         creds = filteredCreds,
@@ -529,11 +531,14 @@ class MainActivity : FragmentActivity() {
                         searchQuery = searchQuery,
                         filter = filter,
                         sort = sort,
+                        categoryFilter = categoryFilter,
+                        allCategories = vm.getAllCategories(),
                         syncState = syncState,
                         flash = flash,
                         onSearchQueryChange = { vm.setSearchQuery(it) },
                         onFilterChange = { vm.setFilter(it) },
                         onSortChange = { vm.setSort(it) },
+                        onCategoryFilterChange = { vm.setCategoryFilter(it) },
                         onClearFilters = { vm.clearFilters() },
                         onToggleFavorite = { vm.toggleFavorite(it.id, !it.isFavorite) },
                         onAdd = { navTo(Screen.Edit(null)) },
@@ -623,6 +628,9 @@ class MainActivity : FragmentActivity() {
                     val driveEmail by
                     settings.driveEmail.collectAsState()
 
+                    val customCategories by
+                    vm.customCategories.collectAsState()
+
                     SettingsScreen(
 
                         appTheme = appTheme,
@@ -639,6 +647,9 @@ class MainActivity : FragmentActivity() {
                             BiometricLock.isAvailable(
                                 this@MainActivity
                             ),
+
+                        customCategories =
+                            customCategories,
 
                         onBack = {
                             pop()
@@ -675,6 +686,18 @@ class MainActivity : FragmentActivity() {
                             navTo(
                                 Screen.Setup
                             )
+                        },
+
+                        onCreateCategory = { cat: String ->
+                            vm.addCategory(cat)
+                        },
+
+                        onRenameCategory = { old: String, new: String ->
+                            vm.renameCategory(old, new)
+                        },
+
+                        onDeleteCategory = { cat: String ->
+                            vm.deleteCategory(cat)
                         }
                     )
                 }
@@ -776,10 +799,16 @@ class MainActivity : FragmentActivity() {
 
                 is Screen.Edit -> {
 
+                    val customCategories by
+                    vm.customCategories.collectAsState()
+
                     EditScreen(
 
                         existing =
                             screen.cred,
+
+                        categories =
+                            vm.getAllCategories(),
 
                         onBack = {
                             pop()
@@ -789,14 +818,20 @@ class MainActivity : FragmentActivity() {
                                 id,
                                 ssid,
                                 pass,
-                                note ->
+                                note,
+                                category ->
 
                             vm.save(
                                 id,
                                 ssid,
                                 pass,
-                                note
+                                note,
+                                category
                             )
+                        },
+
+                        onCreateCategory = {
+                            vm.addCategory(it)
                         },
 
                         prefillSsid =

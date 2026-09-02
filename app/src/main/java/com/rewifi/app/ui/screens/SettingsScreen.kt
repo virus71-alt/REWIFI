@@ -16,24 +16,39 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.rewifi.app.data.SettingsStore
+import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
+import com.rewifi.app.ui.components.BrutalField
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
+import com.rewifi.app.ui.theme.Red
 import com.rewifi.app.ui.theme.RewifiTheme
+import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
 
 @Composable
@@ -43,17 +58,21 @@ fun SettingsScreen(
     autoLockMinutes: Int,
     backupConfigured: Boolean,
     biometricAvailable: Boolean,
+    customCategories: List<String>,
     onBack: () -> Unit,
     onSelectTheme: (String) -> Unit,
     onToggleAppLock: (Boolean) -> Unit,
     onCycleAutoLock: () -> Unit,
-    onOpenBackupSetup: () -> Unit
+    onOpenBackupSetup: () -> Unit,
+    onCreateCategory: (String) -> Boolean,
+    onRenameCategory: (String, String) -> Boolean,
+    onDeleteCategory: (String) -> Unit
 ) {
     val colors = RewifiTheme.colors
 
     Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         Column(
-            Modifier.fillMaxSize().padding(20.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -68,6 +87,13 @@ fun SettingsScreen(
             }
 
             ThemeSettingRow(appTheme = appTheme, onSelectTheme = onSelectTheme)
+
+            CategoryManagementCard(
+                customCategories = customCategories,
+                onCreateCategory = onCreateCategory,
+                onRenameCategory = onRenameCategory,
+                onDeleteCategory = onDeleteCategory
+            )
 
             SettingRow(
                 title = "APP LOCK",
@@ -98,6 +124,8 @@ fun SettingsScreen(
                            else "Connect Google Drive to back up automatically",
                 onClick = onOpenBackupSetup
             )
+
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
@@ -224,6 +252,230 @@ private fun BrutalSwitch(checked: Boolean, enabled: Boolean, onChange: (Boolean)
             Modifier.padding(3.dp).size(24.dp).clip(CircleShape).background(colors.surface)
                 .border(3.dp, colors.border, CircleShape)
         )
+    }
+}
+
+@Composable
+private fun CategoryManagementCard(
+    customCategories: List<String>,
+    onCreateCategory: (String) -> Boolean,
+    onRenameCategory: (String, String) -> Boolean,
+    onDeleteCategory: (String) -> Unit
+) {
+    val colors = RewifiTheme.colors
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var createName by remember { mutableStateOf("") }
+    var createError by remember { mutableStateOf<String?>(null) }
+
+    var categoryToRename by remember { mutableStateOf<String?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var renameError by remember { mutableStateOf<String?>(null) }
+
+    var categoryToDelete by remember { mutableStateOf<String?>(null) }
+
+    BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column {
+                Text("CATEGORIES", fontWeight = FontWeight.Black, fontSize = 16.sp, color = colors.textPrimary)
+                Spacer(Modifier.height(4.dp))
+                Text("Organize and tag your saved WiFi networks", color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+            }
+
+            // Built-in categories
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("BUILT-IN (DEFAULT)", fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.textSecondary, letterSpacing = 1.sp)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val firstHalf = SettingsStore.BUILTIN_CATEGORIES.take(3)
+                    firstHalf.forEach { cat ->
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.surfaceVariant)
+                                .border(2.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(cat.uppercase(), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textPrimary)
+                        }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val secondHalf = SettingsStore.BUILTIN_CATEGORIES.drop(3)
+                    secondHalf.forEach { cat ->
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.surfaceVariant)
+                                .border(2.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(cat.uppercase(), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textPrimary)
+                        }
+                    }
+                }
+            }
+
+            // Custom categories
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("CUSTOM CATEGORIES", fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.textSecondary, letterSpacing = 1.sp)
+                if (customCategories.isEmpty()) {
+                    Text("No custom categories added yet.", color = colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                } else {
+                    customCategories.forEach { customCat ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(colors.surfaceVariant)
+                                .border(2.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                customCat.uppercase(),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp,
+                                color = colors.textPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            // Edit
+                            Box(
+                                Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(colors.surface)
+                                    .border(2.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        categoryToRename = customCat
+                                        renameText = customCat
+                                        renameError = null
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Rename", tint = colors.textPrimary, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            // Delete
+                            Box(
+                                Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(Red)
+                                    .border(2.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        categoryToDelete = customCat
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Snow, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            BrutalButton(
+                text = "+ ADD CATEGORY",
+                modifier = Modifier.fillMaxWidth(),
+                bg = Yellow,
+                fg = Ink
+            ) {
+                createName = ""
+                createError = null
+                showCreateDialog = true
+            }
+        }
+    }
+
+    // Create Dialog
+    if (showCreateDialog) {
+        Dialog(onDismissRequest = { showCreateDialog = false }) {
+            BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("ADD CUSTOM CATEGORY", fontWeight = FontWeight.Black, fontSize = 18.sp, color = colors.textPrimary)
+                    BrutalField("CATEGORY NAME", createName, { createName = it; createError = null }, "e.g. Office, School")
+                    if (createError != null) {
+                        Text(createError!!, color = Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        BrutalButton("CANCEL", Modifier.weight(1f), bg = colors.surfaceVariant, fg = colors.textPrimary) {
+                            showCreateDialog = false
+                        }
+                        BrutalButton("ADD", Modifier.weight(1f), bg = Yellow, fg = Ink) {
+                            val clean = createName.trim()
+                            if (clean.isBlank()) {
+                                createError = "Name cannot be empty"
+                            } else if (SettingsStore.BUILTIN_CATEGORIES.any { it.equals(clean, ignoreCase = true) }) {
+                                createError = "Built-in category already exists"
+                            } else if (customCategories.any { it.equals(clean, ignoreCase = true) }) {
+                                createError = "Category already exists"
+                            } else {
+                                val ok = onCreateCategory(clean)
+                                if (ok) showCreateDialog = false else createError = "Failed to add category"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Rename Dialog
+    if (categoryToRename != null) {
+        val old = categoryToRename!!
+        Dialog(onDismissRequest = { categoryToRename = null }) {
+            BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("RENAME CATEGORY", fontWeight = FontWeight.Black, fontSize = 18.sp, color = colors.textPrimary)
+                    BrutalField("NEW NAME", renameText, { renameText = it; renameError = null }, old)
+                    if (renameError != null) {
+                        Text(renameError!!, color = Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        BrutalButton("CANCEL", Modifier.weight(1f), bg = colors.surfaceVariant, fg = colors.textPrimary) {
+                            categoryToRename = null
+                        }
+                        BrutalButton("SAVE", Modifier.weight(1f), bg = Yellow, fg = Ink) {
+                            val clean = renameText.trim()
+                            if (clean.isBlank()) {
+                                renameError = "Name cannot be empty"
+                            } else if (SettingsStore.BUILTIN_CATEGORIES.any { it.equals(clean, ignoreCase = true) }) {
+                                renameError = "Cannot rename to built-in category"
+                            } else if (customCategories.any { it.equals(clean, ignoreCase = true) && !it.equals(old, ignoreCase = true) }) {
+                                renameError = "Category name already in use"
+                            } else {
+                                val ok = onRenameCategory(old, clean)
+                                if (ok) categoryToRename = null else renameError = "Failed to rename"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Delete Confirmation Dialog
+    if (categoryToDelete != null) {
+        val cat = categoryToDelete!!
+        Dialog(onDismissRequest = { categoryToDelete = null }) {
+            BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(20.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("DELETE CATEGORY?", fontWeight = FontWeight.Black, fontSize = 18.sp, color = colors.textPrimary)
+                    Text(
+                        "Deleting \"${cat}\" will not delete any saved networks.\nExisting entries using this category will be reassigned to \"Other\".",
+                        color = colors.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        BrutalButton("CANCEL", Modifier.weight(1f), bg = colors.surfaceVariant, fg = colors.textPrimary) {
+                            categoryToDelete = null
+                        }
+                        BrutalButton("DELETE", Modifier.weight(1f), bg = Red, fg = Snow) {
+                            onDeleteCategory(cat)
+                            categoryToDelete = null
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

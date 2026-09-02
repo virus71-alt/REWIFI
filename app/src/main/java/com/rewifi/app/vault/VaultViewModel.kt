@@ -44,16 +44,25 @@ class VaultViewModel(
 
     val vaultFilter: StateFlow<VaultFilter> = settings.vaultFilter
     val vaultSort: StateFlow<VaultSort> = settings.vaultSort
+    val categoryFilter: StateFlow<String> = settings.categoryFilter
+    val customCategories: StateFlow<List<String>> = settings.customCategories
+
+    fun getAllCategories(): List<String> = settings.allCategories()
+
+    private val filterConfig = combine(
+        settings.vaultFilter,
+        settings.vaultSort,
+        settings.categoryFilter
+    ) { f, s, c -> Triple(f, s, c) }
 
     val filteredCreds: StateFlow<List<WifiCred>> =
         combine(
             creds,
             _searchQuery,
-            settings.vaultFilter,
-            settings.vaultSort,
+            filterConfig,
             settings.updatedAtMap
-        ) { list, query, filter, sort, updatedMap ->
-            VaultFilterSort.filterAndSort(list, query, filter, sort, updatedMap)
+        ) { list, query, (filter, sort, categoryFilter), updatedMap ->
+            VaultFilterSort.filterAndSort(list, query, filter, sort, categoryFilter, updatedMap)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setSearchQuery(query: String) {
@@ -68,13 +77,39 @@ class VaultViewModel(
         settings.setVaultSort(sort)
     }
 
+    fun setCategoryFilter(category: String) {
+        settings.setCategoryFilter(category)
+    }
+
+    fun addCategory(name: String): Boolean {
+        return settings.addCustomCategory(name)
+    }
+
+    fun renameCategory(oldName: String, newName: String): Boolean {
+        val ok = settings.renameCustomCategory(oldName, newName)
+        if (ok) {
+            viewModelScope.launch {
+                repo.renameCategory(oldName, newName.trim())
+            }
+        }
+        return ok
+    }
+
+    fun deleteCategory(name: String) {
+        settings.deleteCustomCategory(name)
+        viewModelScope.launch {
+            repo.reassignCategoryToOther(name)
+        }
+    }
+
     fun clearFilters() {
         _searchQuery.value = ""
         settings.setVaultFilter(VaultFilter.ALL)
+        settings.setCategoryFilter("ALL")
     }
 
-    fun save(id: Long, ssid: String, password: String, note: String?) = viewModelScope.launch {
-        repo.upsert(id, ssid, password, note)
+    fun save(id: Long, ssid: String, password: String, note: String?, category: String = "Other") = viewModelScope.launch {
+        repo.upsert(id, ssid, password, note, category)
         if (id != 0L) {
             settings.recordUpdated(id, System.currentTimeMillis())
         }
@@ -107,7 +142,7 @@ class VaultViewModel(
     fun writeAutoBackupNow() = viewModelScope.launch(Dispatchers.IO) {
         runCatching {
             autoBackupFile.parentFile?.mkdirs()
-            autoBackupFile.writeBytes(repo.autoBackupBlob())
+            autoBackupFile.writeBytes(repo.autoBackupBlob(settings.customCategories.value))
         }
     }
 
@@ -123,7 +158,7 @@ class VaultViewModel(
             val account = DriveAuth.account(appContext) ?: return@launch
             // Never overwrite a real Drive backup with an empty vault (e.g. right after a reinstall).
             if (repo.count() == 0) return@launch
-            DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account)))
+            DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account), settings.customCategories.value))
             settings.setLastBackupAt(System.currentTimeMillis())
         }
     }
@@ -134,7 +169,7 @@ class VaultViewModel(
             runCatching {
                 val account = DriveAuth.account(appContext) ?: error("Connect Google Drive first")
                 if (repo.count() == 0) error("Vault is empty — nothing to back up")
-                DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account)))
+                DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account), settings.customCategories.value))
                 settings.setLastBackupAt(System.currentTimeMillis())
                 "Synced to Drive"
             }.getOrElse { "Sync failed: ${it.message}" }
@@ -165,7 +200,7 @@ class VaultViewModel(
             runCatching {
                 val account = DriveAuth.account(appContext) ?: error("Connect Google Drive first")
                 if (repo.count() == 0) error("Vault is empty — nothing to back up")
-                DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account)))
+                DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account), settings.customCategories.value))
                 settings.setLastBackupAt(System.currentTimeMillis())
             }.isSuccess
         }
@@ -192,14 +227,16 @@ class VaultViewModel(
                 val remote = DriveBackup.download(appContext, account)
                 when {
                     remote != null -> {
-                        val n = repo.importEncrypted(remote, key)
+                        val n = repo.importEncrypted(remote, key) { cats ->
+                            cats.forEach { settings.addCustomCategory(it) }
+                        }
                         "Drive connected · restored $n network${if (n == 1) "" else "s"}"
                     }
                     // No backup the app can read. Only seed Drive from a NON-empty local
                     // vault — never upload an empty one, or we'd clobber a backup that exists
                     // but isn't currently visible to this install (drive.file after reinstall).
                     repo.count() > 0 -> {
-                        DriveBackup.upload(appContext, account, repo.exportEncrypted(key))
+                        DriveBackup.upload(appContext, account, repo.exportEncrypted(key, settings.customCategories.value))
                         settings.setLastBackupAt(System.currentTimeMillis())
                         "Drive connected · backup uploaded"
                     }
@@ -219,7 +256,9 @@ class VaultViewModel(
             runCatching {
                 val account = DriveAuth.account(appContext) ?: error("Not signed in to Drive")
                 val bytes = DriveBackup.download(appContext, account) ?: error("No backup found in Drive")
-                val n = repo.importEncrypted(bytes, DriveBackup.keyFor(account))
+                val n = repo.importEncrypted(bytes, DriveBackup.keyFor(account)) { cats ->
+                    cats.forEach { settings.addCustomCategory(it) }
+                }
                 "Restored $n network${if (n == 1) "" else "s"} from Drive"
             }.getOrElse {
                 if (it is javax.crypto.AEADBadTagException) "Backup is from a different Google account"
@@ -232,7 +271,7 @@ class VaultViewModel(
     /** Encrypt the whole vault with [passphrase]; hand the bytes back for sharing. */
     fun exportBytes(passphrase: String, onReady: (ByteArray?, String) -> Unit) =
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { repo.exportEncrypted(passphrase) } }
+            val result = withContext(Dispatchers.IO) { runCatching { repo.exportEncrypted(passphrase, settings.customCategories.value) } }
             result
                 .onSuccess { onReady(it, "") }
                 .onFailure { onReady(null, "Export failed: ${it.message}") }
@@ -245,7 +284,9 @@ class VaultViewModel(
                 runCatching {
                     val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
                         ?: error("Couldn't open the file")
-                    val n = repo.importEncrypted(bytes, passphrase)
+                    val n = repo.importEncrypted(bytes, passphrase) { cats ->
+                        cats.forEach { settings.addCustomCategory(it) }
+                    }
                     "Restored $n network${if (n == 1) "" else "s"}"
                 }.getOrElse {
                     if (it is javax.crypto.AEADBadTagException) "Wrong passphrase"

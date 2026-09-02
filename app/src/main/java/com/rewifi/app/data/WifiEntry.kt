@@ -12,5 +12,6 @@ data class WifiEntry(
     /** Optional free-text note, e.g. "cafe near the park, ask waiter". */
     val note: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val category: String = "Other"
 )

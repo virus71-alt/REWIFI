@@ -12,7 +12,8 @@ data class WifiCred(
     val password: String,
     val note: String?,
     val createdAt: Long,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val category: String = "Other"
 )
 
 class VaultRepository(private val dao: WifiDao) {
@@ -24,19 +25,28 @@ class VaultRepository(private val dao: WifiDao) {
     /** Number of saved networks — used to refuse uploading an empty vault over a real backup. */
     suspend fun count(): Int = dao.count()
 
-    suspend fun upsert(id: Long, ssid: String, password: String, note: String?) {
+    suspend fun upsert(id: Long, ssid: String, password: String, note: String?, category: String = "Other") {
         val enc = Crypto.encrypt(password)
         val cleanNote = note?.trim()?.ifBlank { null }
+        val cleanCategory = category.trim().ifBlank { "Other" }
         if (id == 0L) {
-            dao.insert(WifiEntry(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote, isFavorite = false))
+            dao.insert(WifiEntry(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote, isFavorite = false, category = cleanCategory))
         } else {
             val existing = dao.byId(id) ?: return
-            dao.update(existing.copy(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote))
+            dao.update(existing.copy(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote, category = cleanCategory))
         }
     }
 
     suspend fun setFavorite(id: Long, isFavorite: Boolean) {
         dao.setFavorite(id, isFavorite)
+    }
+
+    suspend fun reassignCategoryToOther(category: String) {
+        dao.reassignCategoryToOther(category)
+    }
+
+    suspend fun renameCategory(oldCategory: String, newCategory: String) {
+        dao.renameCategory(oldCategory, newCategory)
     }
 
     suspend fun delete(id: Long) {
@@ -47,12 +57,12 @@ class VaultRepository(private val dao: WifiDao) {
     suspend fun addIfNew(ssid: String, password: String): Boolean {
         val clean = ssid.trim()
         if (clean.isEmpty() || dao.countBySsid(clean) > 0) return false
-        dao.insert(WifiEntry(ssid = clean, passwordEnc = Crypto.encrypt(password), note = null, isFavorite = false))
+        dao.insert(WifiEntry(ssid = clean, passwordEnc = Crypto.encrypt(password), note = null, isFavorite = false, category = "Other"))
         return true
     }
 
     /** Decrypt the whole vault and re-pack as a plaintext JSON snapshot. */
-    private suspend fun snapshotJson(): String {
+    private suspend fun snapshotJson(customCategories: List<String> = emptyList()): String {
         val items = JSONArray()
         dao.all().forEach { e ->
             val pw = runCatching { Crypto.decrypt(e.passwordEnc) }.getOrDefault("")
@@ -62,32 +72,53 @@ class VaultRepository(private val dao: WifiDao) {
                     .put("pw", pw)
                     .put("note", e.note ?: "")
                     .put("fav", e.isFavorite)
+                    .put("cat", e.category)
             )
         }
-        return JSONObject().put("v", 1).put("items", items).toString()
+        val customCats = JSONArray()
+        customCategories.forEach { customCats.put(it) }
+        return JSONObject()
+            .put("v", 1)
+            .put("items", items)
+            .put("custom_cats", customCats)
+            .toString()
     }
 
     /** Decrypt the whole vault, re-pack as JSON, then passphrase-encrypt for portability. */
-    suspend fun exportEncrypted(passphrase: String): ByteArray =
-        BackupCrypto.encrypt(snapshotJson().toByteArray(Charsets.UTF_8), passphrase.toCharArray())
+    suspend fun exportEncrypted(passphrase: String, customCategories: List<String> = emptyList()): ByteArray =
+        BackupCrypto.encrypt(snapshotJson(customCategories).toByteArray(Charsets.UTF_8), passphrase.toCharArray())
 
     /**
      * Device-bound (hardware Keystore) encrypted snapshot for *silent* local
      * auto-backup — no passphrase prompt. Stays on-device; to survive a reinstall
      * or factory reset use the passphrase export / Drive sync instead.
      */
-    suspend fun autoBackupBlob(): ByteArray =
-        Crypto.encrypt(snapshotJson()).toByteArray(Charsets.UTF_8)
+    suspend fun autoBackupBlob(customCategories: List<String> = emptyList()): ByteArray =
+        Crypto.encrypt(snapshotJson(customCategories)).toByteArray(Charsets.UTF_8)
 
     /**
      * Decrypt a backup and merge it in: new SSIDs are added, and existing ones are
-     * updated when their password, note, or favorite changed (instead of being skipped).
-     * Backwards-compatible: older backups without "fav" default to false.
+     * updated when their password, note, favorite, or category changed (instead of being skipped).
+     * Backwards-compatible: older backups without "fav" default to false, and without "cat" default to "Other".
      * Returns the number of entries added or updated.
      */
-    suspend fun importEncrypted(blob: ByteArray, passphrase: String): Int {
+    suspend fun importEncrypted(
+        blob: ByteArray,
+        passphrase: String,
+        onImportCustomCategories: (List<String>) -> Unit = {}
+    ): Int {
         val json = String(BackupCrypto.decrypt(blob, passphrase.toCharArray()), Charsets.UTF_8)
-        val items = JSONObject(json).getJSONArray("items")
+        val root = JSONObject(json)
+        val items = root.getJSONArray("items")
+        val customCatsArr = root.optJSONArray("custom_cats")
+        if (customCatsArr != null) {
+            val customCats = mutableListOf<String>()
+            for (i in 0 until customCatsArr.length()) {
+                val cat = customCatsArr.optString(i, "").trim()
+                if (cat.isNotEmpty()) customCats.add(cat)
+            }
+            onImportCustomCategories(customCats)
+        }
         var changed = 0
         for (i in 0 until items.length()) {
             val o = items.getJSONObject(i)
@@ -96,14 +127,15 @@ class VaultRepository(private val dao: WifiDao) {
             val pw = o.getString("pw")
             val note = o.optString("note", "").trim().ifBlank { null }
             val fav = o.optBoolean("fav", false)
+            val cat = o.optString("cat", "Other").trim().ifBlank { "Other" }
             val existing = dao.bySsid(ssid)
             if (existing == null) {
-                dao.insert(WifiEntry(ssid = ssid, passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav))
+                dao.insert(WifiEntry(ssid = ssid, passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav, category = cat))
                 changed++
             } else {
                 val curPw = runCatching { Crypto.decrypt(existing.passwordEnc) }.getOrDefault("")
-                if (curPw != pw || existing.note != note || existing.isFavorite != fav) {
-                    dao.update(existing.copy(passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav))
+                if (curPw != pw || existing.note != note || existing.isFavorite != fav || existing.category != cat) {
+                    dao.update(existing.copy(passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav, category = cat))
                     changed++
                 }
             }
@@ -112,5 +144,5 @@ class VaultRepository(private val dao: WifiDao) {
     }
 
     private fun WifiEntry.toCred(): WifiCred =
-        WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt, isFavorite)
+        WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt, isFavorite, category)
 }

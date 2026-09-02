@@ -40,6 +40,12 @@ interface WifiDao {
     @Query("UPDATE wifi_entries SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun setFavorite(id: Long, isFavorite: Boolean)
 
+    @Query("UPDATE wifi_entries SET lastConnectedAt = :timestamp, connectionCount = connectionCount + 1 WHERE id = :id")
+    suspend fun recordConnection(id: Long, timestamp: Long)
+
+    @Query("UPDATE wifi_entries SET lastConnectedAt = :timestamp, connectionCount = connectionCount + 1 WHERE LOWER(TRIM(ssid)) = LOWER(TRIM(:ssid))")
+    suspend fun recordConnectionBySsid(ssid: String, timestamp: Long)
+
     @Query("UPDATE wifi_entries SET category = 'Other' WHERE category = :oldCategory")
     suspend fun reassignCategoryToOther(oldCategory: String)
 

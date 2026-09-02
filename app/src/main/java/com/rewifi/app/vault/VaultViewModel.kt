@@ -137,6 +137,18 @@ class VaultViewModel(
         }
     }
 
+    fun recordConnection(id: Long) = viewModelScope.launch {
+        repo.recordConnection(id, System.currentTimeMillis())
+        autoBackupIfEnabled()
+        driveSyncIfEnabled()
+    }
+
+    fun recordConnectionForSsid(ssid: String) = viewModelScope.launch {
+        repo.recordConnectionForSsid(ssid, System.currentTimeMillis())
+        autoBackupIfEnabled()
+        driveSyncIfEnabled()
+    }
+
     fun updateExisting(
         targetId: Long,
         newPassword: String,

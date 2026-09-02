@@ -13,7 +13,9 @@ data class WifiCred(
     val note: String?,
     val createdAt: Long,
     val isFavorite: Boolean = false,
-    val category: String = "Other"
+    val category: String = "Other",
+    val lastConnectedAt: Long? = null,
+    val connectionCount: Int = 0
 )
 
 class VaultRepository(private val dao: WifiDao) {
@@ -69,6 +71,14 @@ class VaultRepository(private val dao: WifiDao) {
             .map { it.toCred() }
     }
 
+    suspend fun recordConnection(id: Long, timestamp: Long) {
+        dao.recordConnection(id, timestamp)
+    }
+
+    suspend fun recordConnectionForSsid(ssid: String, timestamp: Long) {
+        dao.recordConnectionBySsid(ssid.trim(), timestamp)
+    }
+
     suspend fun updateExisting(
         targetId: Long,
         newPassword: String,
@@ -99,6 +109,8 @@ class VaultRepository(private val dao: WifiDao) {
                     .put("note", e.note ?: "")
                     .put("fav", e.isFavorite)
                     .put("cat", e.category)
+                    .put("last_conn", e.lastConnectedAt ?: 0L)
+                    .put("conn_cnt", e.connectionCount)
             )
         }
         val customCats = JSONArray()
@@ -124,8 +136,9 @@ class VaultRepository(private val dao: WifiDao) {
 
     /**
      * Decrypt a backup and merge it in: new SSIDs are added, and existing ones are
-     * updated when their password, note, favorite, or category changed (instead of being skipped).
-     * Backwards-compatible: older backups without "fav" default to false, and without "cat" default to "Other".
+     * updated when their password, note, favorite, category, or usage metadata changed.
+     * Backwards-compatible: older backups without "fav" default to false, "cat" defaults to "Other",
+     * "last_conn" defaults to null, and "conn_cnt" defaults to 0.
      * Returns the number of entries added or updated.
      */
     suspend fun importEncrypted(
@@ -154,14 +167,43 @@ class VaultRepository(private val dao: WifiDao) {
             val note = o.optString("note", "").trim().ifBlank { null }
             val fav = o.optBoolean("fav", false)
             val cat = o.optString("cat", "Other").trim().ifBlank { "Other" }
+            val lastConnRaw = o.optLong("last_conn", 0L)
+            val lastConn = if (lastConnRaw > 0L) lastConnRaw else null
+            val connCnt = o.optInt("conn_cnt", 0)
+
             val existing = dao.bySsid(ssid)
             if (existing == null) {
-                dao.insert(WifiEntry(ssid = ssid, passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav, category = cat))
+                dao.insert(
+                    WifiEntry(
+                        ssid = ssid,
+                        passwordEnc = Crypto.encrypt(pw),
+                        note = note,
+                        isFavorite = fav,
+                        category = cat,
+                        lastConnectedAt = lastConn,
+                        connectionCount = connCnt
+                    )
+                )
                 changed++
             } else {
                 val curPw = runCatching { Crypto.decrypt(existing.passwordEnc) }.getOrDefault("")
-                if (curPw != pw || existing.note != note || existing.isFavorite != fav || existing.category != cat) {
-                    dao.update(existing.copy(passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav, category = cat))
+                val shouldUpdateLastConn = lastConn != null && (existing.lastConnectedAt == null || lastConn > existing.lastConnectedAt)
+                val newLastConn = if (shouldUpdateLastConn) lastConn else existing.lastConnectedAt
+                val newConnCnt = maxOf(existing.connectionCount, connCnt)
+
+                if (curPw != pw || existing.note != note || existing.isFavorite != fav || existing.category != cat ||
+                    existing.lastConnectedAt != newLastConn || existing.connectionCount != newConnCnt
+                ) {
+                    dao.update(
+                        existing.copy(
+                            passwordEnc = Crypto.encrypt(pw),
+                            note = note,
+                            isFavorite = fav,
+                            category = cat,
+                            lastConnectedAt = newLastConn,
+                            connectionCount = newConnCnt
+                        )
+                    )
                     changed++
                 }
             }
@@ -170,5 +212,5 @@ class VaultRepository(private val dao: WifiDao) {
     }
 
     private fun WifiEntry.toCred(): WifiCred =
-        WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt, isFavorite, category)
+        WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt, isFavorite, category, lastConnectedAt, connectionCount)
 }

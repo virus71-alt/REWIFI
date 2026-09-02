@@ -74,6 +74,10 @@ class SettingsStore(context: Context) {
     private val _clipboardClearSeconds = MutableStateFlow(prefs.getInt(KEY_CLIPBOARD_CLEAR_SECONDS, 30))
     val clipboardClearSeconds: StateFlow<Int> = _clipboardClearSeconds.asStateFlow()
 
+    /** Whether to show the compact Recent Networks section on the vault screen. Default: true. */
+    private val _showRecentNetworks = MutableStateFlow(prefs.getBoolean(KEY_SHOW_RECENT_NETWORKS, true))
+    val showRecentNetworks: StateFlow<Boolean> = _showRecentNetworks.asStateFlow()
+
     private val _autoBackup = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackup.asStateFlow()
 
@@ -207,6 +211,11 @@ class SettingsStore(context: Context) {
     fun setClipboardClearSeconds(seconds: Int) {
         prefs.edit { putInt(KEY_CLIPBOARD_CLEAR_SECONDS, seconds) }
         _clipboardClearSeconds.value = seconds
+    }
+
+    fun setShowRecentNetworks(show: Boolean) {
+        prefs.edit { putBoolean(KEY_SHOW_RECENT_NETWORKS, show) }
+        _showRecentNetworks.value = show
     }
 
     fun setVaultSort(sort: VaultSort) {
@@ -376,6 +385,7 @@ class SettingsStore(context: Context) {
         private const val KEY_PIN_LOCKOUT_UNTIL = "pin_lockout_until"
         private const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"
         private const val KEY_CLIPBOARD_CLEAR_SECONDS = "clipboard_clear_seconds"
+        private const val KEY_SHOW_RECENT_NETWORKS = "show_recent_networks"
         private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
         private const val KEY_INTRO_DONE = "intro_done"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"

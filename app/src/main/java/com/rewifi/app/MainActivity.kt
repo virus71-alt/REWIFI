@@ -419,6 +419,7 @@ class MainActivity : FragmentActivity() {
         val hasPin by settings.hasPin.collectAsState()
         val pinLength by settings.pinLength.collectAsState()
         val clipboardClearSeconds by settings.clipboardClearSeconds.collectAsState()
+        val showRecentNetworks by settings.showRecentNetworks.collectAsState()
 
         if (appLockType != AppLockType.OFF && !unlocked.value) {
             when (appLockType) {
@@ -567,6 +568,7 @@ class MainActivity : FragmentActivity() {
                         sort = sort,
                         categoryFilter = categoryFilter,
                         allCategories = vm.getAllCategories(),
+                        showRecentNetworks = showRecentNetworks,
                         syncState = syncState,
                         flash = flash,
                         onSearchQueryChange = { vm.setSearchQuery(it) },
@@ -598,6 +600,7 @@ class MainActivity : FragmentActivity() {
                         val result = WifiConnector.connect(this@MainActivity, sSsid, sPass, sSec)
                         when (result) {
                             is WifiConnector.Result.Connected -> {
+                                vm.recordConnectionForSsid(sSsid)
                                 vm.showFlash("Connected to $sSsid · saved", ok = true)
                             }
                             is WifiConnector.Result.PromptShown -> {
@@ -684,6 +687,7 @@ class MainActivity : FragmentActivity() {
                         biometricAvailable = BiometricLock.isAvailable(this@MainActivity),
                         customCategories = customCategories,
                         clipboardClearSeconds = clipboardClearSeconds,
+                        showRecentNetworks = showRecentNetworks,
                         onBack = { pop() },
                         onSelectTheme = { settings.setAppTheme(it) },
                         onSetAppLockType = { settings.setAppLockType(it) },
@@ -691,6 +695,7 @@ class MainActivity : FragmentActivity() {
                         onVerifyPin = { settings.verifyPin(it) },
                         onClearPin = { settings.clearPin() },
                         onSelectClipboardClearSeconds = { settings.setClipboardClearSeconds(it) },
+                        onToggleShowRecentNetworks = { settings.setShowRecentNetworks(it) },
 
                         onCycleAutoLock = {
 
@@ -928,6 +933,22 @@ class MainActivity : FragmentActivity() {
 
                             onToggleFavorite = {
                                 vm.toggleFavorite(live.id, it)
+                            },
+
+                            onConnect = {
+                                val result = WifiConnector.connect(this@MainActivity, live.ssid, live.password, "")
+                                when (result) {
+                                    is WifiConnector.Result.Connected -> {
+                                        vm.recordConnection(live.id)
+                                        vm.showFlash("Connected to ${live.ssid}", ok = true)
+                                    }
+                                    is WifiConnector.Result.PromptShown -> {
+                                        vm.showFlash("Tap Save to connect", ok = true)
+                                    }
+                                    is WifiConnector.Result.Failed -> {
+                                        vm.showFlash("Couldn't auto-connect: ${result.reason}", ok = false)
+                                    }
+                                }
                             }
                         )
                     }

@@ -12,7 +12,9 @@ enum class VaultSort {
     RECENTLY_ADDED,
     RECENTLY_UPDATED,
     NAME_AZ,
-    NAME_ZA
+    NAME_ZA,
+    RECENTLY_CONNECTED,
+    MOST_USED
 }
 
 object VaultFilterSort {
@@ -76,6 +78,20 @@ object VaultFilterSort {
                         }
                         VaultSort.NAME_AZ -> String.CASE_INSENSITIVE_ORDER.compare(a.ssid, b.ssid)
                         VaultSort.NAME_ZA -> String.CASE_INSENSITIVE_ORDER.compare(b.ssid, a.ssid)
+                        VaultSort.RECENTLY_CONNECTED -> {
+                            val connA = a.lastConnectedAt ?: 0L
+                            val connB = b.lastConnectedAt ?: 0L
+                            if (connA != 0L || connB != 0L) {
+                                val cmp = connB.compareTo(connA)
+                                if (cmp != 0) cmp else String.CASE_INSENSITIVE_ORDER.compare(a.ssid, b.ssid)
+                            } else {
+                                String.CASE_INSENSITIVE_ORDER.compare(a.ssid, b.ssid)
+                            }
+                        }
+                        VaultSort.MOST_USED -> {
+                            val cmp = b.connectionCount.compareTo(a.connectionCount)
+                            if (cmp != 0) cmp else String.CASE_INSENSITIVE_ORDER.compare(a.ssid, b.ssid)
+                        }
                     }
                 }
             }

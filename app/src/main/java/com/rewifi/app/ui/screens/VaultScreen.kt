@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.rewifi.app.data.WifiCred
 import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
+import com.rewifi.app.util.TimeFormatter
 import com.rewifi.app.vault.Flash
 import com.rewifi.app.vault.SyncState
 import com.rewifi.app.vault.VaultFilter
@@ -90,6 +92,7 @@ fun VaultScreen(
     sort: VaultSort,
     categoryFilter: String,
     allCategories: List<String>,
+    showRecentNetworks: Boolean = true,
     syncState: SyncState,
     flash: Flash?,
     onSearchQueryChange: (String) -> Unit,
@@ -108,6 +111,11 @@ fun VaultScreen(
     var showAddMenu by remember { mutableStateOf(false) }
     val colors = RewifiTheme.colors
     val isFiltered = searchQuery.isNotBlank() || filter != VaultFilter.ALL || !categoryFilter.equals("ALL", ignoreCase = true)
+    val recentNetworks = remember(creds) {
+        creds.filter { it.lastConnectedAt != null && it.lastConnectedAt > 0L }
+            .sortedByDescending { it.lastConnectedAt }
+            .take(3)
+    }
 
     Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         LazyColumn(
@@ -140,6 +148,15 @@ fun VaultScreen(
                         onSortChange = onSortChange,
                         onCategoryFilterChange = onCategoryFilterChange,
                         onClearFilters = onClearFilters
+                    )
+                }
+            }
+
+            if (showRecentNetworks && recentNetworks.isNotEmpty() && !isFiltered) {
+                item {
+                    RecentNetworksSection(
+                        recents = recentNetworks,
+                        onOpen = onOpen
                     )
                 }
             }
@@ -416,21 +433,34 @@ private fun SearchBarAndFilterControls(
                             letterSpacing = 1.sp
                         )
                         Spacer(Modifier.height(8.dp))
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            FilterChip("RECENT", sort == VaultSort.RECENTLY_ADDED, Modifier.weight(1f), horizontalPadding = 4.dp) {
-                                onSortChange(VaultSort.RECENTLY_ADDED)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip("ADDED", sort == VaultSort.RECENTLY_ADDED, Modifier.weight(1f), horizontalPadding = 4.dp) {
+                                    onSortChange(VaultSort.RECENTLY_ADDED)
+                                }
+                                FilterChip("UPDATED", sort == VaultSort.RECENTLY_UPDATED, Modifier.weight(1f), horizontalPadding = 4.dp) {
+                                    onSortChange(VaultSort.RECENTLY_UPDATED)
+                                }
+                                FilterChip("CONNECTED", sort == VaultSort.RECENTLY_CONNECTED, Modifier.weight(1f), horizontalPadding = 4.dp) {
+                                    onSortChange(VaultSort.RECENTLY_CONNECTED)
+                                }
                             }
-                            FilterChip("UPDATED", sort == VaultSort.RECENTLY_UPDATED, Modifier.weight(1f), horizontalPadding = 4.dp) {
-                                onSortChange(VaultSort.RECENTLY_UPDATED)
-                            }
-                            FilterChip("A → Z", sort == VaultSort.NAME_AZ, Modifier.weight(1f), horizontalPadding = 4.dp) {
-                                onSortChange(VaultSort.NAME_AZ)
-                            }
-                            FilterChip("Z → A", sort == VaultSort.NAME_ZA, Modifier.weight(1f), horizontalPadding = 4.dp) {
-                                onSortChange(VaultSort.NAME_ZA)
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip("MOST USED", sort == VaultSort.MOST_USED, Modifier.weight(1f), horizontalPadding = 4.dp) {
+                                    onSortChange(VaultSort.MOST_USED)
+                                }
+                                FilterChip("A → Z", sort == VaultSort.NAME_AZ, Modifier.weight(1f), horizontalPadding = 4.dp) {
+                                    onSortChange(VaultSort.NAME_AZ)
+                                }
+                                FilterChip("Z → A", sort == VaultSort.NAME_ZA, Modifier.weight(1f), horizontalPadding = 4.dp) {
+                                    onSortChange(VaultSort.NAME_ZA)
+                                }
                             }
                         }
                     }
@@ -731,6 +761,16 @@ private fun WifiRow(
                             softWrap = false
                         )
                     }
+                    if (c.lastConnectedAt != null && c.lastConnectedAt > 0L) {
+                        Text(
+                            "• " + TimeFormatter.formatRelative(c.lastConnectedAt),
+                            color = colors.textSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -778,4 +818,70 @@ private fun EmptyState() {
         }
     }
 }
+
+@Composable
+private fun RecentNetworksSection(
+    recents: List<WifiCred>,
+    onOpen: (WifiCred) -> Unit
+) {
+    val colors = RewifiTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                Icons.Default.History,
+                contentDescription = null,
+                tint = colors.textSecondary,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                "RECENTLY CONNECTED",
+                fontWeight = FontWeight.Black,
+                fontSize = 11.sp,
+                color = colors.textSecondary,
+                letterSpacing = 1.sp
+            )
+        }
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            recents.forEach { cred ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (cred.isFavorite) Yellow.copy(alpha = 0.2f) else colors.surface)
+                        .border(2.dp, colors.border, RoundedCornerShape(10.dp))
+                        .clickable { onOpen(cred) }
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Column {
+                        Text(
+                            cred.ssid,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.sp,
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            TimeFormatter.formatRelative(cred.lastConnectedAt ?: 0L),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            color = colors.textSecondary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 

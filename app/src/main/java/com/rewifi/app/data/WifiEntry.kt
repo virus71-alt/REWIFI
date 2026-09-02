@@ -13,5 +13,7 @@ data class WifiEntry(
     val note: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val isFavorite: Boolean = false,
-    val category: String = "Other"
+    val category: String = "Other",
+    val lastConnectedAt: Long? = null,
+    val connectionCount: Int = 0
 )

@@ -54,6 +54,7 @@ import com.rewifi.app.ui.theme.Red
 import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
+import com.rewifi.app.util.TimeFormatter
 import com.rewifi.app.vault.ClipboardCleaner
 
 @Composable
@@ -64,6 +65,7 @@ fun DetailScreen(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onWriteNfc: () -> Unit,
+    onConnect: () -> Unit = {},
     onToggleFavorite: (Boolean) -> Unit = {}
 ) {
     val ctx = LocalContext.current
@@ -157,8 +159,9 @@ fun DetailScreen(
             }
         }
 
-        // Share QR + write to an NFC tag.
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Connect, Share QR, NFC tag
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BrutalButton("CONNECT", Modifier.weight(1f), bg = Yellow, fg = Ink, onClick = onConnect)
             BrutalButton("SHARE QR", Modifier.weight(1f), bg = Green, fg = Ink) {
                 shareQrImage(ctx, cred.ssid, cred.password)
             }
@@ -181,6 +184,48 @@ fun DetailScreen(
                     Pill("COPY", Green, Ink) {
                         ClipboardCleaner.copyPassword(ctx, cred.password, clipboardClearSeconds)
                     }
+                }
+            }
+        }
+
+        // Usage history
+        BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "LAST CONNECTED",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = colors.textSecondary,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        TimeFormatter.formatDetailed(cred.lastConnectedAt),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = colors.textPrimary
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "CONNECTIONS",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = colors.textSecondary,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (cred.connectionCount == 1) "1 TIME" else "${cred.connectionCount} TIMES",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = if (cred.connectionCount > 0) Green else colors.textPrimary
+                    )
                 }
             }
         }

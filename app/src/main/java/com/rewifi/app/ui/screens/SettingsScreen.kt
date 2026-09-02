@@ -66,6 +66,7 @@ fun SettingsScreen(
     biometricAvailable: Boolean,
     customCategories: List<String>,
     clipboardClearSeconds: Int = 30,
+    showRecentNetworks: Boolean = true,
     onBack: () -> Unit,
     onSelectTheme: (String) -> Unit,
     onSetAppLockType: (AppLockType) -> Unit,
@@ -74,6 +75,7 @@ fun SettingsScreen(
     onClearPin: () -> Unit,
     onCycleAutoLock: () -> Unit,
     onSelectClipboardClearSeconds: (Int) -> Unit = {},
+    onToggleShowRecentNetworks: (Boolean) -> Unit = {},
     onOpenBackupSetup: () -> Unit,
     onCreateCategory: (String) -> Boolean,
     onRenameCategory: (String, String) -> Boolean,
@@ -155,6 +157,11 @@ fun SettingsScreen(
             AutoClearClipboardCard(
                 clipboardClearSeconds = clipboardClearSeconds,
                 onSelectDuration = onSelectClipboardClearSeconds
+            )
+
+            RecentNetworksSettingCard(
+                showRecentNetworks = showRecentNetworks,
+                onToggle = onToggleShowRecentNetworks
             )
 
             NavRow(
@@ -467,6 +474,55 @@ private fun AutoClearClipboardCard(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentNetworksSettingCard(
+    showRecentNetworks: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val colors = RewifiTheme.colors
+    BrutalCard(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(
+                    "SHOW RECENT NETWORKS",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = colors.textPrimary,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Display up to 3 recently connected networks in vault",
+                    color = colors.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (showRecentNetworks) Green else colors.surface)
+                    .border(2.dp, colors.border, RoundedCornerShape(8.dp))
+                    .clickable { onToggle(!showRecentNetworks) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (showRecentNetworks) "ON" else "OFF",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    color = if (showRecentNetworks) Ink else colors.textPrimary
+                )
             }
         }
     }

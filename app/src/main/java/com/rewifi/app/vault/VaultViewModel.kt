@@ -88,6 +88,12 @@ class VaultViewModel(
         driveSyncIfEnabled()
     }
 
+    fun toggleFavorite(id: Long, isFavorite: Boolean) = viewModelScope.launch {
+        repo.setFavorite(id, isFavorite)
+        autoBackupIfEnabled()
+        driveSyncIfEnabled()
+    }
+
     /** Save a freshly scanned network (deduped by SSID) and kick off a Drive sync. */
     fun saveScanned(ssid: String, password: String, onDone: (added: Boolean) -> Unit = {}) =
         viewModelScope.launch {

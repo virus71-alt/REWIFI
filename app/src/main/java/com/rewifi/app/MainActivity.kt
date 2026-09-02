@@ -535,6 +535,7 @@ class MainActivity : FragmentActivity() {
                         onFilterChange = { vm.setFilter(it) },
                         onSortChange = { vm.setSort(it) },
                         onClearFilters = { vm.clearFilters() },
+                        onToggleFavorite = { vm.toggleFavorite(it.id, !it.isFavorite) },
                         onAdd = { navTo(Screen.Edit(null)) },
                         onOpen = { navTo(Screen.Detail(it)) },
                         onBackup = { navTo(Screen.Backup) },
@@ -852,6 +853,10 @@ class MainActivity : FragmentActivity() {
                                         live
                                     )
                                 )
+                            },
+
+                            onToggleFavorite = {
+                                vm.toggleFavorite(live.id, it)
                             }
                         )
                     }

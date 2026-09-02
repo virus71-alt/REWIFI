@@ -34,6 +34,9 @@ interface WifiDao {
     @Update
     suspend fun update(entry: WifiEntry)
 
+    @Query("UPDATE wifi_entries SET isFavorite = :isFavorite WHERE id = :id")
+    suspend fun setFavorite(id: Long, isFavorite: Boolean)
+
     @Delete
     suspend fun delete(entry: WifiEntry)
 }

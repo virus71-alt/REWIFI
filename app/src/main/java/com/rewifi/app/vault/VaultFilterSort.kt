@@ -49,19 +49,25 @@ object VaultFilterSort {
                 }
             }
             .sortedWith { a, b ->
-                when (sort) {
-                    VaultSort.RECENTLY_ADDED -> {
-                        val cmp = b.createdAt.compareTo(a.createdAt)
-                        if (cmp != 0) cmp else b.id.compareTo(a.id)
+                // Pin favorites at the top: true comes before false
+                val favCmp = b.isFavorite.compareTo(a.isFavorite)
+                if (favCmp != 0) {
+                    favCmp
+                } else {
+                    when (sort) {
+                        VaultSort.RECENTLY_ADDED -> {
+                            val cmp = b.createdAt.compareTo(a.createdAt)
+                            if (cmp != 0) cmp else b.id.compareTo(a.id)
+                        }
+                        VaultSort.RECENTLY_UPDATED -> {
+                            val timeA = updatedMap[a.id] ?: a.createdAt
+                            val timeB = updatedMap[b.id] ?: b.createdAt
+                            val cmp = timeB.compareTo(timeA)
+                            if (cmp != 0) cmp else b.id.compareTo(a.id)
+                        }
+                        VaultSort.NAME_AZ -> String.CASE_INSENSITIVE_ORDER.compare(a.ssid, b.ssid)
+                        VaultSort.NAME_ZA -> String.CASE_INSENSITIVE_ORDER.compare(b.ssid, a.ssid)
                     }
-                    VaultSort.RECENTLY_UPDATED -> {
-                        val timeA = updatedMap[a.id] ?: a.createdAt
-                        val timeB = updatedMap[b.id] ?: b.createdAt
-                        val cmp = timeB.compareTo(timeA)
-                        if (cmp != 0) cmp else b.id.compareTo(a.id)
-                    }
-                    VaultSort.NAME_AZ -> String.CASE_INSENSITIVE_ORDER.compare(a.ssid, b.ssid)
-                    VaultSort.NAME_ZA -> String.CASE_INSENSITIVE_ORDER.compare(b.ssid, a.ssid)
                 }
             }
             .toList()

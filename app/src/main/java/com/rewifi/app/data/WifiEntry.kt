@@ -11,5 +11,6 @@ data class WifiEntry(
     val passwordEnc: String,
     /** Optional free-text note, e.g. "cafe near the park, ask waiter". */
     val note: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isFavorite: Boolean = false
 )

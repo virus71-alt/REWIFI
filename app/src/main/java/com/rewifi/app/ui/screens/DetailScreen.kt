@@ -20,12 +20,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,7 +61,8 @@ fun DetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onWriteNfc: () -> Unit
+    onWriteNfc: () -> Unit,
+    onToggleFavorite: (Boolean) -> Unit = {}
 ) {
     val ctx = LocalContext.current
     val colors = RewifiTheme.colors
@@ -85,6 +89,19 @@ fun DetailScreen(
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary) }
             Spacer(Modifier.weight(1f))
+            Box(
+                Modifier.height(44.dp).background(if (cred.isFavorite) Yellow else colors.surface, RoundedCornerShape(12.dp))
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
+                    .clickable { onToggleFavorite(!cred.isFavorite) }.padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (cred.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    "Favorite",
+                    tint = if (cred.isFavorite) Ink else colors.textPrimary
+                )
+            }
+            Spacer(Modifier.width(10.dp))
             Box(
                 Modifier.height(44.dp).background(Red, RoundedCornerShape(12.dp))
                     .border(3.dp, colors.border, RoundedCornerShape(12.dp))

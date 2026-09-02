@@ -11,7 +11,8 @@ data class WifiCred(
     val ssid: String,
     val password: String,
     val note: String?,
-    val createdAt: Long
+    val createdAt: Long,
+    val isFavorite: Boolean = false
 )
 
 class VaultRepository(private val dao: WifiDao) {
@@ -27,11 +28,15 @@ class VaultRepository(private val dao: WifiDao) {
         val enc = Crypto.encrypt(password)
         val cleanNote = note?.trim()?.ifBlank { null }
         if (id == 0L) {
-            dao.insert(WifiEntry(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote))
+            dao.insert(WifiEntry(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote, isFavorite = false))
         } else {
             val existing = dao.byId(id) ?: return
             dao.update(existing.copy(ssid = ssid.trim(), passwordEnc = enc, note = cleanNote))
         }
+    }
+
+    suspend fun setFavorite(id: Long, isFavorite: Boolean) {
+        dao.setFavorite(id, isFavorite)
     }
 
     suspend fun delete(id: Long) {
@@ -42,7 +47,7 @@ class VaultRepository(private val dao: WifiDao) {
     suspend fun addIfNew(ssid: String, password: String): Boolean {
         val clean = ssid.trim()
         if (clean.isEmpty() || dao.countBySsid(clean) > 0) return false
-        dao.insert(WifiEntry(ssid = clean, passwordEnc = Crypto.encrypt(password), note = null))
+        dao.insert(WifiEntry(ssid = clean, passwordEnc = Crypto.encrypt(password), note = null, isFavorite = false))
         return true
     }
 
@@ -51,7 +56,13 @@ class VaultRepository(private val dao: WifiDao) {
         val items = JSONArray()
         dao.all().forEach { e ->
             val pw = runCatching { Crypto.decrypt(e.passwordEnc) }.getOrDefault("")
-            items.put(JSONObject().put("ssid", e.ssid).put("pw", pw).put("note", e.note ?: ""))
+            items.put(
+                JSONObject()
+                    .put("ssid", e.ssid)
+                    .put("pw", pw)
+                    .put("note", e.note ?: "")
+                    .put("fav", e.isFavorite)
+            )
         }
         return JSONObject().put("v", 1).put("items", items).toString()
     }
@@ -70,8 +81,9 @@ class VaultRepository(private val dao: WifiDao) {
 
     /**
      * Decrypt a backup and merge it in: new SSIDs are added, and existing ones are
-     * updated when their password or note changed (instead of being skipped). Returns
-     * the number of entries added or updated.
+     * updated when their password, note, or favorite changed (instead of being skipped).
+     * Backwards-compatible: older backups without "fav" default to false.
+     * Returns the number of entries added or updated.
      */
     suspend fun importEncrypted(blob: ByteArray, passphrase: String): Int {
         val json = String(BackupCrypto.decrypt(blob, passphrase.toCharArray()), Charsets.UTF_8)
@@ -83,14 +95,15 @@ class VaultRepository(private val dao: WifiDao) {
             if (ssid.isEmpty()) continue
             val pw = o.getString("pw")
             val note = o.optString("note", "").trim().ifBlank { null }
+            val fav = o.optBoolean("fav", false)
             val existing = dao.bySsid(ssid)
             if (existing == null) {
-                dao.insert(WifiEntry(ssid = ssid, passwordEnc = Crypto.encrypt(pw), note = note))
+                dao.insert(WifiEntry(ssid = ssid, passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav))
                 changed++
             } else {
                 val curPw = runCatching { Crypto.decrypt(existing.passwordEnc) }.getOrDefault("")
-                if (curPw != pw || existing.note != note) {
-                    dao.update(existing.copy(passwordEnc = Crypto.encrypt(pw), note = note))
+                if (curPw != pw || existing.note != note || existing.isFavorite != fav) {
+                    dao.update(existing.copy(passwordEnc = Crypto.encrypt(pw), note = note, isFavorite = fav))
                     changed++
                 }
             }
@@ -99,5 +112,5 @@ class VaultRepository(private val dao: WifiDao) {
     }
 
     private fun WifiEntry.toCred(): WifiCred =
-        WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt)
+        WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt, isFavorite)
 }

@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
@@ -89,6 +91,7 @@ fun VaultScreen(
     onFilterChange: (VaultFilter) -> Unit,
     onSortChange: (VaultSort) -> Unit,
     onClearFilters: () -> Unit,
+    onToggleFavorite: (WifiCred) -> Unit,
     onAdd: () -> Unit,
     onOpen: (WifiCred) -> Unit,
     onBackup: () -> Unit,
@@ -140,7 +143,11 @@ fun VaultScreen(
                 }
             } else {
                 items(creds, key = { it.id }) { c ->
-                    WifiRow(c, accents[(c.id % accents.size).toInt()]) { onOpen(c) }
+                    WifiRow(
+                        c = c,
+                        accent = accents[(c.id % accents.size).toInt()],
+                        onToggleFavorite = { onToggleFavorite(c) }
+                    ) { onOpen(c) }
                 }
             }
         }
@@ -569,7 +576,12 @@ private fun Header(
 }
 
 @Composable
-private fun WifiRow(c: WifiCred, accent: Color, onClick: () -> Unit) {
+private fun WifiRow(
+    c: WifiCred,
+    accent: Color,
+    onToggleFavorite: () -> Unit,
+    onClick: () -> Unit
+) {
     val colors = RewifiTheme.colors
     BrutalCard(Modifier.fillMaxWidth().clickable(onClick = onClick), padding = PaddingValues(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -583,6 +595,29 @@ private fun WifiRow(c: WifiCred, accent: Color, onClick: () -> Unit) {
                 Text(c.ssid, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = colors.textPrimary, maxLines = 1)
                 Text("•••••••••", color = colors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
+            Spacer(Modifier.width(8.dp))
+            // Pin / Favorite action button
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (c.isFavorite) Yellow else colors.surfaceVariant)
+                    .border(
+                        2.dp,
+                        if (c.isFavorite) colors.border else colors.border.copy(alpha = 0.35f),
+                        RoundedCornerShape(10.dp)
+                    )
+                    .clickable(onClick = onToggleFavorite),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (c.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = if (c.isFavorite) "Unpin network" else "Pin network",
+                    tint = if (c.isFavorite) Ink else colors.textSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(10.dp))
             Text("OPEN ›", fontWeight = FontWeight.Black, fontSize = 12.sp, color = colors.textPrimary)
         }
     }

@@ -54,9 +54,8 @@ import com.rewifi.app.vault.SyncState
 import com.rewifi.app.ui.theme.Blue
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
-import com.rewifi.app.ui.theme.Muted
-import com.rewifi.app.ui.theme.Paper
 import com.rewifi.app.ui.theme.Red
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
 
@@ -75,8 +74,9 @@ fun VaultScreen(
     onSync: () -> Unit
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
+    val colors = RewifiTheme.colors
 
-    Box(Modifier.fillMaxSize().background(Paper).systemBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(20.dp, 24.dp, 20.dp, 120.dp),
@@ -132,15 +132,16 @@ fun VaultScreen(
 /** Full-screen "Syncing… / Synced" feedback for the manual sync button. */
 @Composable
 private fun SyncOverlay(state: SyncState) {
+    val colors = RewifiTheme.colors
     Box(
         Modifier.fillMaxSize().background(Ink.copy(alpha = 0.55f)),
         contentAlignment = Alignment.Center
     ) {
-        BrutalCard(bg = Snow, padding = PaddingValues(32.dp)) {
+        BrutalCard(bg = colors.surface, padding = PaddingValues(32.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 when (state) {
                     SyncState.SYNCING ->
-                        CircularProgressIndicator(color = Ink, strokeWidth = 4.dp, modifier = Modifier.size(48.dp))
+                        CircularProgressIndicator(color = Yellow, strokeWidth = 5.dp)
                     SyncState.SYNCED -> StatusBubble(Icons.Default.Check, Green, Ink)
                     SyncState.FAILED -> StatusBubble(Icons.Default.Close, Red, Snow)
                     SyncState.IDLE -> {}
@@ -153,7 +154,7 @@ private fun SyncOverlay(state: SyncState) {
                         SyncState.FAILED -> "SYNC FAILED"
                         SyncState.IDLE -> ""
                     },
-                    fontWeight = FontWeight.Black, fontSize = 18.sp, color = Ink
+                    fontWeight = FontWeight.Black, fontSize = 18.sp, color = colors.textPrimary
                 )
             }
         }
@@ -162,8 +163,9 @@ private fun SyncOverlay(state: SyncState) {
 
 @Composable
 private fun StatusBubble(icon: ImageVector, bg: Color, iconTint: Color) {
+    val colors = RewifiTheme.colors
     Box(
-        Modifier.size(48.dp).clip(CircleShape).background(bg).border(3.dp, Ink, CircleShape),
+        Modifier.size(48.dp).clip(CircleShape).background(bg).border(3.dp, colors.border, CircleShape),
         contentAlignment = Alignment.Center
     ) { Icon(icon, null, tint = iconTint, modifier = Modifier.size(28.dp)) }
 }
@@ -185,11 +187,12 @@ private fun AddMenu(onDismiss: () -> Unit, onManual: () -> Unit, onScan: () -> U
 
 @Composable
 private fun AddOption(icon: ImageVector, label: String, bg: Color, fg: Color, onClick: () -> Unit) {
+    val colors = RewifiTheme.colors
     Box {
-        Box(Modifier.matchParentSize().offset(4.dp, 4.dp).clip(RoundedCornerShape(14.dp)).background(Ink))
+        Box(Modifier.matchParentSize().offset(4.dp, 4.dp).clip(RoundedCornerShape(14.dp)).background(colors.shadow))
         Row(
             Modifier.clip(RoundedCornerShape(14.dp)).background(bg)
-                .border(3.dp, Ink, RoundedCornerShape(14.dp))
+                .border(3.dp, colors.border, RoundedCornerShape(14.dp))
                 .clickable(onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -211,11 +214,12 @@ private fun SquareButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val colors = RewifiTheme.colors
     Box(modifier.size(size)) {
-        Box(Modifier.matchParentSize().offset(5.dp, 5.dp).clip(RoundedCornerShape(18.dp)).background(Ink))
+        Box(Modifier.matchParentSize().offset(5.dp, 5.dp).clip(RoundedCornerShape(18.dp)).background(colors.shadow))
         Box(
             Modifier.size(size).clip(RoundedCornerShape(18.dp)).background(bg)
-                .border(3.dp, Ink, RoundedCornerShape(18.dp))
+                .border(3.dp, colors.border, RoundedCornerShape(18.dp))
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) { Icon(icon, null, tint = iconTint, modifier = Modifier.size(size * 0.46f)) }
@@ -224,64 +228,67 @@ private fun SquareButton(
 
 @Composable
 private fun Header(count: Int, onBackup: () -> Unit, onSettings: () -> Unit, onSync: () -> Unit) {
+    val colors = RewifiTheme.colors
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.clip(RoundedCornerShape(8.dp)).background(Yellow)
-                    .border(3.dp, Ink, RoundedCornerShape(8.dp))
+                    .border(3.dp, colors.border, RoundedCornerShape(8.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) { Text("REWIFI", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink) }
             Spacer(Modifier.weight(1f))
             // Sync + settings + backup = matching square brutalist buttons, mirroring the FAB.
             SquareButton(Icons.Default.Sync, Green, Ink, 46.dp, onClick = onSync)
             Spacer(Modifier.width(10.dp))
-            SquareButton(Icons.Default.Settings, Snow, Ink, 46.dp, onClick = onSettings)
+            SquareButton(Icons.Default.Settings, colors.surface, colors.textPrimary, 46.dp, onClick = onSettings)
             Spacer(Modifier.width(10.dp))
-            SquareButton(Icons.Default.Upload, Snow, Ink, 46.dp, onClick = onBackup)
+            SquareButton(Icons.Default.Upload, colors.surface, colors.textPrimary, 46.dp, onClick = onBackup)
         }
         Spacer(Modifier.height(14.dp))
         Text("YOUR\nWIFI VAULT", fontWeight = FontWeight.Black, fontSize = 38.sp,
-            color = Ink, lineHeight = 40.sp)
+            color = colors.textPrimary, lineHeight = 40.sp)
         Spacer(Modifier.height(6.dp))
         Text("$count saved network${if (count == 1) "" else "s"} · encrypted",
-            color = Muted, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 13.sp)
         Spacer(Modifier.height(4.dp))
     }
 }
 
 @Composable
 private fun WifiRow(c: WifiCred, accent: Color, onClick: () -> Unit) {
+    val colors = RewifiTheme.colors
     BrutalCard(Modifier.fillMaxWidth().clickable(onClick = onClick), padding = PaddingValues(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(accent)
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp)),
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.Wifi, null, tint = Ink, modifier = Modifier.size(24.dp)) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(c.ssid, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Ink, maxLines = 1)
-                Text("•••••••••", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(c.ssid, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = colors.textPrimary, maxLines = 1)
+                Text("•••••••••", color = colors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
-            Text("OPEN ›", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Ink)
+            Text("OPEN ›", fontWeight = FontWeight.Black, fontSize = 12.sp, color = colors.textPrimary)
         }
     }
 }
 
 @Composable
 private fun EmptyState() {
-    BrutalCard(Modifier.fillMaxWidth(), bg = Snow, padding = PaddingValues(28.dp)) {
+    val colors = RewifiTheme.colors
+    BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(28.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Box(
                 Modifier.size(70.dp).clip(CircleShape).background(Yellow)
-                    .border(3.dp, Ink, CircleShape),
+                    .border(3.dp, colors.border, CircleShape),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.Wifi, null, tint = Ink, modifier = Modifier.size(36.dp)) }
             Spacer(Modifier.height(16.dp))
-            Text("NO NETWORKS YET", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Ink)
+            Text("NO NETWORKS YET", fontWeight = FontWeight.Black, fontSize = 18.sp, color = colors.textPrimary)
             Spacer(Modifier.height(6.dp))
             Text("Tap + to save your first cafe WiFi.\nIt survives every phone reset.",
-                color = Muted, fontWeight = FontWeight.Medium, fontSize = 13.sp,
+                color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 13.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }

@@ -41,13 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
-import com.rewifi.app.ui.components.BrutalField
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
-import com.rewifi.app.ui.theme.Muted
-import com.rewifi.app.ui.theme.Paper
 import com.rewifi.app.ui.theme.Red
-import com.rewifi.app.ui.theme.Snow
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Yellow
 
 /**
@@ -69,10 +66,11 @@ fun SetupScreen(
     onSkip: (() -> Unit)? = null
 ) {
     val driveConnected = driveEmail != null
+    val colors = RewifiTheme.colors
 
     BackHandler { (onSkip ?: onFinish)() }
 
-    Box(Modifier.fillMaxSize().background(Paper).systemBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()
                 .padding(20.dp),
@@ -82,27 +80,27 @@ fun SetupScreen(
             if (!firstRun) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Snow)
-                            .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                        Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(colors.surface)
+                            .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                             .clickable(onClick = onFinish),
                         contentAlignment = Alignment.Center
-                    ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Ink) }
+                    ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = colors.textPrimary) }
                     Spacer(Modifier.width(14.dp))
-                    Text("BACKUP & SYNC", fontWeight = FontWeight.Black, fontSize = 24.sp, color = Ink)
+                    Text("BACKUP & SYNC", fontWeight = FontWeight.Black, fontSize = 24.sp, color = colors.textPrimary)
                 }
             } else {
                 Box(
                     Modifier.clip(RoundedCornerShape(8.dp)).background(Yellow)
-                        .border(3.dp, Ink, RoundedCornerShape(8.dp))
+                        .border(3.dp, colors.border, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) { Text("REWIFI", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink) }
                 Text(
                     "NEVER LOSE\nA WIFI AGAIN", fontWeight = FontWeight.Black, fontSize = 34.sp,
-                    color = Ink, lineHeight = 36.sp
+                    color = colors.textPrimary, lineHeight = 36.sp
                 )
                 Text(
                     "Set up a backup so your saved networks survive a reset, crash, or new phone.",
-                    color = Muted, fontWeight = FontWeight.Medium, fontSize = 13.sp
+                    color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 13.sp
                 )
             }
 
@@ -110,9 +108,9 @@ fun SetupScreen(
             BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CloudUpload, null, tint = Ink, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Default.CloudUpload, null, tint = colors.textPrimary, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("GOOGLE DRIVE", fontWeight = FontWeight.Black, fontSize = 15.sp, color = Ink)
+                        Text("GOOGLE DRIVE", fontWeight = FontWeight.Black, fontSize = 15.sp, color = colors.textPrimary)
                         Spacer(Modifier.weight(1f))
                         if (driveConnected) StatusChip("ON", Green, check = true)
                     }
@@ -122,7 +120,7 @@ fun SetupScreen(
                             "Synced to $driveEmail. Backs up automatically after every change and once a day, into a REWIFI folder in your Drive."
                         else
                             "Connect your Google Drive and we'll keep an encrypted backup in a REWIFI folder — no passphrase needed. A new phone restores in seconds.",
-                        color = Muted, fontWeight = FontWeight.Medium, fontSize = 12.sp
+                        color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 12.sp
                     )
                     if (driveConnected) {
                         Spacer(Modifier.height(8.dp))
@@ -131,7 +129,7 @@ fun SetupScreen(
                                 "Last synced ${DateUtils.getRelativeTimeSpanString(lastBackupAt)}"
                             else
                                 "Not synced yet — tap Sync now",
-                            color = Ink, fontWeight = FontWeight.Bold, fontSize = 12.sp
+                            color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 12.sp
                         )
                     }
                     Spacer(Modifier.height(14.dp))
@@ -150,7 +148,7 @@ fun SetupScreen(
                             Spacer(Modifier.height(10.dp))
                         }
                         BrutalButton(
-                            "RESTORE FROM DRIVE", modifier = Modifier.fillMaxWidth(), bg = Ink, fg = Yellow
+                            "RESTORE FROM DRIVE", modifier = Modifier.fillMaxWidth(), bg = colors.surface, fg = colors.textPrimary
                         ) { onRestoreFromDrive() }
                         Spacer(Modifier.height(10.dp))
                         Box(
@@ -167,17 +165,17 @@ fun SetupScreen(
 
             // --- Footer ---
             if (firstRun) {
-                BrutalButton("CONTINUE", modifier = Modifier.fillMaxWidth(), bg = Ink, fg = Yellow) {
+                BrutalButton("CONTINUE", modifier = Modifier.fillMaxWidth(), bg = Yellow, fg = Ink) {
                     onFinish()
                 }
                 Box(
                     Modifier.fillMaxWidth().clickable { (onSkip ?: onFinish)() }.padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("SKIP FOR NOW", color = Muted, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                    Text("SKIP FOR NOW", color = colors.textSecondary, fontWeight = FontWeight.Black, fontSize = 13.sp)
                 }
             } else {
-                BrutalButton("DONE", modifier = Modifier.fillMaxWidth(), bg = Ink, fg = Yellow) { onFinish() }
+                BrutalButton("DONE", modifier = Modifier.fillMaxWidth(), bg = Yellow, fg = Ink) { onFinish() }
             }
         }
     }
@@ -185,9 +183,10 @@ fun SetupScreen(
 
 @Composable
 private fun StatusChip(text: String, bg: androidx.compose.ui.graphics.Color, check: Boolean) {
+    val colors = RewifiTheme.colors
     Box(
         Modifier.clip(RoundedCornerShape(8.dp)).background(bg)
-            .border(2.dp, Ink, RoundedCornerShape(8.dp))
+            .border(2.dp, colors.border, RoundedCornerShape(8.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp),
         contentAlignment = Alignment.Center
     ) {

@@ -34,8 +34,7 @@ import com.rewifi.app.data.WifiCred
 import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalField
 import com.rewifi.app.ui.theme.Ink
-import com.rewifi.app.ui.theme.Paper
-import com.rewifi.app.ui.theme.Snow
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Yellow
 
 @Composable
@@ -46,13 +45,14 @@ fun EditScreen(
     prefillSsid: String? = null,
     prefillPass: String? = null
 ) {
+    val colors = RewifiTheme.colors
     var ssid by rememberSaveable { mutableStateOf(existing?.ssid ?: prefillSsid ?: "") }
     var pass by rememberSaveable { mutableStateOf(existing?.password ?: prefillPass ?: "") }
     var note by rememberSaveable { mutableStateOf(existing?.note ?: "") }
     val valid = ssid.isNotBlank() && pass.isNotBlank()
 
     Column(
-        Modifier.fillMaxSize().background(Paper).systemBarsPadding().padding(20.dp)
+        Modifier.fillMaxSize().background(colors.background).systemBarsPadding().padding(20.dp)
     ) {
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -71,7 +71,8 @@ fun EditScreen(
         BrutalButton(
             if (existing == null) "SAVE TO VAULT" else "UPDATE",
             Modifier.fillMaxWidth(),
-            bg = if (valid) Yellow else Snow, fg = Ink
+            bg = if (valid) Yellow else colors.surfaceVariant,
+            fg = if (valid) Ink else colors.textSecondary
         ) {
             if (valid) { onSave(existing?.id ?: 0L, ssid, pass, note); onBack() }
         }
@@ -80,13 +81,15 @@ fun EditScreen(
 
 @Composable
 private fun TopBar(title: String, onBack: () -> Unit) {
+    val colors = RewifiTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.height(44.dp).background(Snow, RoundedCornerShape(12.dp))
-                .border(3.dp, Ink, RoundedCornerShape(12.dp))
+            Modifier.height(44.dp).background(colors.surface, RoundedCornerShape(12.dp))
+                .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                 .clickable(onClick = onBack).padding(horizontal = 10.dp),
             contentAlignment = Alignment.Center
-        ) { Icon(Icons.Default.ArrowBack, "Back", tint = Ink) }
-        Text("  $title", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Ink)
+        ) { Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary) }
+        Text("  $title", fontWeight = FontWeight.Black, fontSize = 20.sp, color = colors.textPrimary)
     }
 }
+

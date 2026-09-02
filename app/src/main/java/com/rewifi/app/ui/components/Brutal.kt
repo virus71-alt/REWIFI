@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rewifi.app.ui.theme.Ink
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 
 private val Radius = 18.dp
@@ -38,7 +39,9 @@ private const val BORDER = 3f
 @Composable
 fun BrutalCard(
     modifier: Modifier = Modifier,
-    bg: Color = Snow,
+    bg: Color = RewifiTheme.colors.surface,
+    borderColor: Color = RewifiTheme.colors.border,
+    shadowColor: Color = RewifiTheme.colors.shadow,
     shadow: Dp = 6.dp,
     padding: PaddingValues = PaddingValues(16.dp),
     content: @Composable () -> Unit
@@ -47,11 +50,11 @@ fun BrutalCard(
     Box(
         modifier
             .drawBehind {
-                drawRoundRectHard(Ink, Offset(s, s), size.width, size.height, Radius.toPx())
+                drawRoundRectHard(shadowColor, Offset(s, s), size.width, size.height, Radius.toPx())
             }
             .clip(RoundedCornerShape(Radius))
             .background(bg)
-            .border(BorderStroke(BORDER.dp, Ink), RoundedCornerShape(Radius))
+            .border(BorderStroke(BORDER.dp, borderColor), RoundedCornerShape(Radius))
             .padding(padding)
     ) { content() }
 }
@@ -72,8 +75,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRoundRectHard(
 fun BrutalButton(
     text: String,
     modifier: Modifier = Modifier,
-    bg: Color = Ink,
-    fg: Color = Snow,
+    bg: Color = RewifiTheme.colors.accent,
+    fg: Color = RewifiTheme.colors.onAccent,
+    borderColor: Color = RewifiTheme.colors.border,
+    shadowColor: Color = RewifiTheme.colors.shadow,
     onClick: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -86,7 +91,7 @@ fun BrutalButton(
                 .matchParentSize()
                 .offset(5.dp, 5.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Ink)
+                .background(shadowColor)
         )
         Box(
             Modifier
@@ -94,7 +99,7 @@ fun BrutalButton(
                 .offset(5.dp - depth, 5.dp - depth)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .border(BorderStroke(BORDER.dp, Ink), RoundedCornerShape(14.dp))
+                .border(BorderStroke(BORDER.dp, borderColor), RoundedCornerShape(14.dp))
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick)
                 .padding(horizontal = 22.dp, vertical = 16.dp),
             contentAlignment = Alignment.Center
@@ -103,4 +108,5 @@ fun BrutalButton(
         }
     }
 }
+
 

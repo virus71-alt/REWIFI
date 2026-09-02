@@ -19,6 +19,9 @@ class SettingsStore(context: Context) {
     private val _appLock = MutableStateFlow(prefs.getBoolean(KEY_APP_LOCK, false))
     val appLockEnabled: StateFlow<Boolean> = _appLock.asStateFlow()
 
+    private val _appTheme = MutableStateFlow(prefs.getString(KEY_APP_THEME, THEME_LIGHT) ?: THEME_LIGHT)
+    val appTheme: StateFlow<String> = _appTheme.asStateFlow()
+
     /** Minutes the app can be backgrounded before it re-locks. 0 = immediately. */
     private val _autoLockMinutes = MutableStateFlow(prefs.getInt(KEY_AUTO_LOCK_MIN, 1))
     val autoLockMinutes: StateFlow<Int> = _autoLockMinutes.asStateFlow()
@@ -49,6 +52,11 @@ class SettingsStore(context: Context) {
     fun setAppLock(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_APP_LOCK, enabled) }
         _appLock.value = enabled
+    }
+
+    fun setAppTheme(theme: String) {
+        prefs.edit { putString(KEY_APP_THEME, theme) }
+        _appTheme.value = theme
     }
 
     fun setAutoLockMinutes(minutes: Int) {
@@ -99,14 +107,17 @@ class SettingsStore(context: Context) {
         _hasPassphrase.value = false
     }
 
-    private companion object {
-        const val KEY_APP_LOCK = "app_lock_enabled"
-        const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"
-        const val KEY_AUTO_BACKUP = "auto_backup_enabled"
-        const val KEY_INTRO_DONE = "intro_done"
-        const val KEY_ONBOARDING_DONE = "onboarding_done"
-        const val KEY_BACKUP_PASS = "backup_passphrase_enc"
-        const val KEY_DRIVE_EMAIL = "drive_email"
-        const val KEY_LAST_BACKUP = "last_backup_at"
+    companion object {
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+        private const val KEY_APP_THEME = "app_theme"
+        private const val KEY_APP_LOCK = "app_lock_enabled"
+        private const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"
+        private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
+        private const val KEY_INTRO_DONE = "intro_done"
+        private const val KEY_ONBOARDING_DONE = "onboarding_done"
+        private const val KEY_BACKUP_PASS = "backup_passphrase_enc"
+        private const val KEY_DRIVE_EMAIL = "drive_email"
+        private const val KEY_LAST_BACKUP = "last_backup_at"
     }
 }

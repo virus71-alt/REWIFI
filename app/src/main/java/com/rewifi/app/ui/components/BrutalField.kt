@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rewifi.app.ui.theme.Ink
 import com.rewifi.app.ui.theme.Muted
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 
 /**
@@ -53,32 +54,33 @@ fun BrutalField(
 ) {
     var visible by remember { mutableStateOf(false) }
     val masked = isPassword && !visible
+    val colors = RewifiTheme.colors
 
     Column(modifier) {
-        Text(label, fontWeight = FontWeight.Black, fontSize = 12.sp, color = Muted, letterSpacing = 1.sp)
+        Text(label, fontWeight = FontWeight.Black, fontSize = 12.sp, color = colors.textSecondary, letterSpacing = 1.sp)
         Spacer(Modifier.height(6.dp))
         Row(
             Modifier.fillMaxWidth()
-                .background(Snow, RoundedCornerShape(12.dp))
-                .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                .background(colors.surface, RoundedCornerShape(12.dp))
+                .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(Modifier.weight(1f)) {
                 if (value.isEmpty()) {
-                    Text(hint, color = Muted, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
+                    Text(hint, color = colors.textSecondary, fontSize = 16.sp, fontFamily = FontFamily.Monospace)
                 }
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
                     singleLine = true,
                     textStyle = TextStyle(
-                        color = Ink, fontSize = 16.sp,
+                        color = colors.textPrimary, fontSize = 16.sp,
                         fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
                     ),
                     visualTransformation =
                         if (masked) PasswordVisualTransformation() else VisualTransformation.None,
-                    cursorBrush = SolidColor(Ink),
+                    cursorBrush = SolidColor(colors.textPrimary),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -87,7 +89,7 @@ fun BrutalField(
                 Icon(
                     imageVector = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                     contentDescription = if (visible) "Hide" else "Show",
-                    tint = Ink,
+                    tint = colors.textPrimary,
                     modifier = Modifier.size(24.dp).clickable { visible = !visible }
                 )
             }

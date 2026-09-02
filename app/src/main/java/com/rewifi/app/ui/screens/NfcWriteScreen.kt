@@ -44,9 +44,8 @@ import com.rewifi.app.ui.components.BrutalCard
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
 import com.rewifi.app.ui.theme.Muted
-import com.rewifi.app.ui.theme.Paper
 import com.rewifi.app.ui.theme.Red
-import com.rewifi.app.ui.theme.Snow
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Yellow
 
 private enum class NfcStatus { WAITING, DONE, FAILED, DISABLED, UNSUPPORTED }
@@ -63,6 +62,7 @@ fun NfcWriteScreen(
     onBack: () -> Unit
 ) {
     val ctx = LocalContext.current
+    val colors = RewifiTheme.colors
     val activity = ctx as? Activity
     val adapter = remember { NfcAdapter.getDefaultAdapter(ctx) }
     val open = password.isEmpty() || security.isBlank() || security.equals("nopass", true)
@@ -98,18 +98,18 @@ fun NfcWriteScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().background(Paper).systemBarsPadding().padding(20.dp),
+        Modifier.fillMaxSize().background(colors.background).systemBarsPadding().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Snow)
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(colors.surface)
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Ink) }
+            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = colors.textPrimary) }
             Spacer(Modifier.width(14.dp))
-            Text("WRITE NFC TAG", fontWeight = FontWeight.Black, fontSize = 22.sp, color = Ink)
+            Text("WRITE NFC TAG", fontWeight = FontWeight.Black, fontSize = 22.sp, color = colors.textPrimary)
         }
 
         val (bg, title, body) = when (status) {
@@ -141,11 +141,11 @@ fun NfcWriteScreen(
 
         if (status == NfcStatus.FAILED) {
             Box(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Snow)
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.surface)
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable { status = NfcStatus.WAITING }.padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center
-            ) { Text("TRY AGAIN", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink) }
+            ) { Text("TRY AGAIN", fontWeight = FontWeight.Black, fontSize = 14.sp, color = colors.textPrimary) }
         }
     }
 }

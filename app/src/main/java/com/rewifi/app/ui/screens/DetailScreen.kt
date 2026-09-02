@@ -47,9 +47,8 @@ import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
-import com.rewifi.app.ui.theme.Muted
-import com.rewifi.app.ui.theme.Paper
 import com.rewifi.app.ui.theme.Red
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
 
@@ -62,15 +61,17 @@ fun DetailScreen(
     onWriteNfc: () -> Unit
 ) {
     val ctx = LocalContext.current
+    val colors = RewifiTheme.colors
     var reveal by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
     var bigQr by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
     val qr = remember(cred.id, cred.ssid, cred.password) {
         runCatching { QrGenerator.build(ctx, cred.ssid, cred.password) }.getOrNull()
     }
 
     Column(
-        Modifier.fillMaxSize().background(Paper).systemBarsPadding().padding(20.dp)
+        Modifier.fillMaxSize().background(colors.background).systemBarsPadding().padding(20.dp)
     ) {
       Column(
         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -78,27 +79,27 @@ fun DetailScreen(
       ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.height(44.dp).background(Snow, RoundedCornerShape(12.dp))
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                Modifier.height(44.dp).background(colors.surface, RoundedCornerShape(12.dp))
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable(onClick = onBack).padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.ArrowBack, "Back", tint = Ink) }
+            ) { Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary) }
             Spacer(Modifier.weight(1f))
             Box(
                 Modifier.height(44.dp).background(Red, RoundedCornerShape(12.dp))
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable { confirmDelete = true }.padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Default.Delete, "Delete", tint = Snow) }
         }
 
-        Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 30.sp, color = Ink, maxLines = 2)
+        Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 30.sp, color = colors.textPrimary, maxLines = 2)
 
         // QR — scan with phone camera to join instantly (the "restore" path)
-        BrutalCard(Modifier.fillMaxWidth(), bg = Snow, padding = PaddingValues(20.dp)) {
+        BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(20.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text("SCAN TO CONNECT", fontWeight = FontWeight.Black, fontSize = 13.sp,
-                    color = Muted, letterSpacing = 1.sp)
+                    color = colors.textSecondary, letterSpacing = 1.sp)
                 Spacer(Modifier.height(14.dp))
                 if (qr != null) {
                     Image(
@@ -110,10 +111,10 @@ fun DetailScreen(
                             .clickable { bigQr = true }
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("Tap to enlarge · share for guests", color = Muted,
+                    Text("Tap to enlarge · share for guests", color = colors.textSecondary,
                         fontWeight = FontWeight.Medium, fontSize = 12.sp)
                 } else {
-                    Text("Could not render QR", color = Muted)
+                    Text("Could not render QR", color = colors.textSecondary)
                 }
             }
         }
@@ -123,7 +124,7 @@ fun DetailScreen(
             BrutalButton("SHARE QR", Modifier.weight(1f), bg = Green, fg = Ink) {
                 shareQrImage(ctx, cred.ssid, cred.password)
             }
-            BrutalButton("NFC TAG", Modifier.weight(1f), bg = Snow, fg = Ink, onClick = onWriteNfc)
+            BrutalButton("NFC TAG", Modifier.weight(1f), bg = colors.surface, fg = colors.textPrimary, onClick = onWriteNfc)
         }
 
         // Password reveal + copy
@@ -138,18 +139,18 @@ fun DetailScreen(
                 )
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Pill(if (reveal) "HIDE" else "REVEAL", Snow) { reveal = !reveal }
-                    Pill("COPY", Green) { copy(ctx, cred.password) }
+                    Pill(if (reveal) "HIDE" else "REVEAL", colors.surface, colors.textPrimary) { reveal = !reveal }
+                    Pill("COPY", Green, Ink) { copy(ctx, cred.password) }
                 }
             }
         }
 
         if (!cred.note.isNullOrBlank()) {
-            BrutalCard(Modifier.fillMaxWidth(), bg = Snow, padding = PaddingValues(14.dp)) {
+            BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
                 Column(Modifier.fillMaxWidth()) {
-                    Text("NOTE", fontWeight = FontWeight.Black, fontSize = 12.sp, color = Muted, letterSpacing = 1.sp)
+                    Text("NOTE", fontWeight = FontWeight.Black, fontSize = 12.sp, color = colors.textSecondary, letterSpacing = 1.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text(cred.note, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Ink)
+                    Text(cred.note, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = colors.textPrimary)
                 }
             }
         }
@@ -157,7 +158,7 @@ fun DetailScreen(
 
       // Pinned at the bottom, always visible regardless of content length.
       Spacer(Modifier.height(14.dp))
-      BrutalButton("EDIT", Modifier.fillMaxWidth(), bg = Ink, fg = Snow, onClick = onEdit)
+      BrutalButton("EDIT", Modifier.fillMaxWidth(), bg = colors.surface, fg = colors.textPrimary, onClick = onEdit)
     }
 
     if (confirmDelete) {
@@ -211,31 +212,38 @@ private fun shareQrImage(ctx: Context, ssid: String, password: String) {
 }
 
 @Composable
-private fun Pill(text: String, bg: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+private fun Pill(
+    text: String,
+    bg: androidx.compose.ui.graphics.Color,
+    fg: androidx.compose.ui.graphics.Color = RewifiTheme.colors.textPrimary,
+    onClick: () -> Unit
+) {
+    val colors = RewifiTheme.colors
     Box(
         Modifier.background(bg, RoundedCornerShape(10.dp))
-            .border(3.dp, Ink, RoundedCornerShape(10.dp))
+            .border(3.dp, colors.border, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 10.dp)
-    ) { Text(text, fontWeight = FontWeight.Black, fontSize = 13.sp, color = Ink) }
+    ) { Text(text, fontWeight = FontWeight.Black, fontSize = 13.sp, color = fg) }
 }
 
 @Composable
 private fun DeleteDialog(ssid: String, onCancel: () -> Unit, onConfirm: () -> Unit) {
+    val colors = RewifiTheme.colors
     Box(
-        Modifier.fillMaxSize().background(Ink.copy(alpha = 0.45f))
+        Modifier.fillMaxSize().background(Ink.copy(alpha = 0.55f))
             .clickable(onClick = onCancel),
         contentAlignment = Alignment.Center
     ) {
-        BrutalCard(Modifier.fillMaxWidth().padding(28.dp), bg = Snow, padding = PaddingValues(22.dp)) {
+        BrutalCard(Modifier.fillMaxWidth().padding(28.dp), padding = PaddingValues(22.dp)) {
             Column(Modifier.fillMaxWidth()) {
-                Text("DELETE “$ssid”?", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Ink)
+                Text("DELETE “$ssid”?", fontWeight = FontWeight.Black, fontSize = 18.sp, color = colors.textPrimary)
                 Spacer(Modifier.height(8.dp))
                 Text("This removes the saved password from your vault. Cannot be undone.",
-                    color = Muted, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                    color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 13.sp)
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Pill("CANCEL", Snow, onCancel)
-                    Pill("DELETE", Red, onConfirm)
+                    Pill("CANCEL", colors.surfaceVariant, colors.textPrimary, onCancel)
+                    Pill("DELETE", Red, Snow, onConfirm)
                 }
             }
         }

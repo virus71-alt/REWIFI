@@ -2,8 +2,11 @@ package com.rewifi.app.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.camera.core.CameraSelector
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -33,10 +37,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,15 +65,14 @@ import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.theme.Ink
 import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
 /**
- * In-app QR scanner built on CameraX + ML Kit. Binds the standard back camera
- * ([CameraSelector.DEFAULT_BACK_CAMERA] — the regular lens, not the ultra-wide
- * one the old ZXing activity grabbed) and reports the first WiFi QR it sees.
- *
- * Because it's a real Compose screen on the back stack, the system Back button
- * pops to the vault instead of dropping the user out to the home screen.
+ * In-app QR scanner built on CameraX + ML Kit with support for live camera
+ * scanning as well as gallery QR import.
  */
 @Composable
 fun ScannerScreen(
@@ -76,6 +81,7 @@ fun ScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
     var hasPermission by remember {
         mutableStateOf(
@@ -91,8 +97,83 @@ fun ScannerScreen(
         if (!hasPermission) permLauncher.launch(Manifest.permission.CAMERA)
     }
 
+    // Shared scanner and analysis executor with proper lifecycle cleanup
+    val scanner = remember {
+        BarcodeScanning.getClient(
+            BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .build()
+        )
+    }
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            scanner.close()
+            analysisExecutor.shutdown()
+        }
+    }
+
     // Guard so we only act on the first valid WiFi QR.
     var handled by remember { mutableStateOf(false) }
+    var isProcessingGallery by remember { mutableStateOf(false) }
+
+    fun processGalleryUri(uri: Uri) {
+        coroutineScope.launch(Dispatchers.IO) {
+            val inputImage = try {
+                InputImage.fromFilePath(context, uri)
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) {
+                    isProcessingGallery = false
+                    Toast.makeText(context, "NO QR CODE FOUND", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+
+            scanner.process(inputImage)
+                .addOnSuccessListener(ContextCompat.getMainExecutor(context)) { barcodes ->
+                    isProcessingGallery = false
+                    if (handled) return@addOnSuccessListener
+
+                    if (barcodes.isEmpty()) {
+                        Toast.makeText(context, "NO QR CODE FOUND", Toast.LENGTH_SHORT).show()
+                        return@addOnSuccessListener
+                    }
+
+                    var foundWifi = false
+                    for (barcode in barcodes) {
+                        val raw = barcode.rawValue ?: continue
+                        val wifi = WifiQr.parse(raw)
+                        if (wifi != null) {
+                            foundWifi = true
+                            handled = true
+                            onResult(wifi.ssid, wifi.password, wifi.security)
+                            break
+                        }
+                    }
+
+                    if (!foundWifi) {
+                        Toast.makeText(context, "NOT A VALID WIFI QR", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .addOnFailureListener(ContextCompat.getMainExecutor(context)) {
+                    isProcessingGallery = false
+                    if (!handled) {
+                        Toast.makeText(context, "NO QR CODE FOUND", Toast.LENGTH_SHORT).show()
+                    }
+                }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            processGalleryUri(uri)
+        } else {
+            isProcessingGallery = false
+        }
+    }
 
     BackHandler { onBack() }
 
@@ -105,12 +186,6 @@ fun ScannerScreen(
                         scaleType = PreviewView.ScaleType.FILL_CENTER
                     }
                     val providerFuture = ProcessCameraProvider.getInstance(ctx)
-                    val analysisExecutor = Executors.newSingleThreadExecutor()
-                    val scanner = BarcodeScanning.getClient(
-                        BarcodeScannerOptions.Builder()
-                            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                            .build()
-                    )
 
                     providerFuture.addListener({
                         val provider = providerFuture.get()
@@ -165,22 +240,46 @@ fun ScannerScreen(
         }
 
         // Top bar: back + prompt.
+        val colors = com.rewifi.app.ui.theme.RewifiTheme.colors
         Row(
             Modifier.fillMaxWidth().systemBarsPadding().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Snow)
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(colors.surface)
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Ink) }
+            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = colors.textPrimary) }
             Spacer(Modifier.width(12.dp))
             Box(
                 Modifier.clip(RoundedCornerShape(10.dp)).background(Yellow)
-                    .border(3.dp, Ink, RoundedCornerShape(10.dp))
+                    .border(3.dp, colors.border, RoundedCornerShape(10.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) { Text("POINT AT A WIFI QR", color = Ink, fontWeight = FontWeight.Black, fontSize = 13.sp) }
+        }
+
+        // Bottom bar: Gallery import button
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 24.dp)
+        ) {
+            BrutalButton(
+                text = if (isProcessingGallery) "SCANNING IMAGE..." else "IMPORT FROM GALLERY",
+                modifier = Modifier.fillMaxWidth(),
+                bg = Yellow,
+                fg = Ink,
+                onClick = {
+                    if (isProcessingGallery || handled) return@BrutalButton
+                    isProcessingGallery = true
+                    galleryLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+            )
         }
     }
 }
@@ -194,3 +293,4 @@ private fun scan(scanner: BarcodeScanner, proxy: ImageProxy, onQr: (String) -> U
         .addOnSuccessListener { codes -> codes.firstOrNull()?.rawValue?.let(onQr) }
         .addOnCompleteListener { proxy.close() }
 }
+

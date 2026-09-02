@@ -39,7 +39,7 @@ import com.rewifi.app.ui.components.BrutalCard
 import com.rewifi.app.ui.components.BrutalField
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
-import com.rewifi.app.ui.theme.Snow
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Yellow
 
 @Composable
@@ -49,6 +49,7 @@ fun BackupScreen(
     onImport: (uri: Uri, passphrase: String) -> Unit
 ) {
     val ctx = LocalContext.current
+    val colors = RewifiTheme.colors
     var pass by remember { mutableStateOf("") }
     val valid = pass.length >= 6
 
@@ -68,17 +69,17 @@ fun BackupScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().background(com.rewifi.app.ui.theme.Paper).systemBarsPadding().padding(20.dp),
+        Modifier.fillMaxSize().background(colors.background).systemBarsPadding().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.height(44.dp).background(Snow, RoundedCornerShape(12.dp))
-                    .border(3.dp, Ink, RoundedCornerShape(12.dp))
+                Modifier.height(44.dp).background(colors.surface, RoundedCornerShape(12.dp))
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable(onClick = onBack).padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.ArrowBack, "Back", tint = Ink) }
-            Text("  BACKUP & RESTORE", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Ink)
+            ) { Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary) }
+            Text("  BACKUP & RESTORE", fontWeight = FontWeight.Black, fontSize = 20.sp, color = colors.textPrimary)
         }
 
         BrutalCard(Modifier.fillMaxWidth(), bg = Yellow, padding = PaddingValues(16.dp)) {
@@ -95,8 +96,9 @@ fun BackupScreen(
         BrutalButton("EXPORT  →  DRIVE / FILE", Modifier.fillMaxWidth(), bg = Green, fg = Ink) {
             guard { onExport(pass) }
         }
-        BrutalButton("RESTORE FROM BACKUP", Modifier.fillMaxWidth(), bg = Snow, fg = Ink) {
+        BrutalButton("RESTORE FROM BACKUP", Modifier.fillMaxWidth(), bg = colors.surface, fg = colors.textPrimary) {
             guard { pickFile.launch("*/*") }
         }
     }
 }
+

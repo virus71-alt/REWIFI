@@ -35,6 +35,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
 import com.rewifi.app.data.DriveAuth
 import com.rewifi.app.data.DriveBackupWorker
+import com.rewifi.app.data.SettingsStore
 import com.rewifi.app.data.WifiConnector
 import com.rewifi.app.data.WifiCred
 import com.rewifi.app.ui.screens.BackupScreen
@@ -138,10 +139,13 @@ class MainActivity : FragmentActivity() {
             File(filesDir, "auto/rewifi-auto-backup.dat")
 
         setContent {
-            RewifiTheme {
+            val appTheme by app.settings.appTheme.collectAsState()
+            val isDark = appTheme == SettingsStore.THEME_DARK
+
+            RewifiTheme(darkTheme = isDark) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Paper
+                    color = RewifiTheme.colors.background
                 ) {
                     val vm: VaultViewModel = viewModel(
                         factory = VaultViewModel.Factory(
@@ -635,6 +639,9 @@ class MainActivity : FragmentActivity() {
 
                 is Screen.Settings -> {
 
+                    val appTheme by
+                    settings.appTheme.collectAsState()
+
                     val lock by
                     settings.appLockEnabled.collectAsState()
 
@@ -645,6 +652,8 @@ class MainActivity : FragmentActivity() {
                     settings.driveEmail.collectAsState()
 
                     SettingsScreen(
+
+                        appTheme = appTheme,
 
                         appLock = lock,
 
@@ -661,6 +670,10 @@ class MainActivity : FragmentActivity() {
 
                         onBack = {
                             pop()
+                        },
+
+                        onSelectTheme = {
+                            settings.setAppTheme(it)
                         },
 
                         onToggleAppLock = {

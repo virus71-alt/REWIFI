@@ -45,8 +45,7 @@ import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.theme.Blue
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
-import com.rewifi.app.ui.theme.Muted
-import com.rewifi.app.ui.theme.Paper
+import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
 import kotlinx.coroutines.launch
@@ -97,16 +96,17 @@ fun IntroScreen(onFinish: () -> Unit) {
     val pager = rememberPagerState(pageCount = { PAGES.size })
     val scope = rememberCoroutineScope()
     val last = pager.currentPage == PAGES.lastIndex
+    val colors = RewifiTheme.colors
 
     BackHandler { onFinish() }
 
-    Box(Modifier.fillMaxSize().background(Paper).systemBarsPadding()) {
+    Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         Column(Modifier.fillMaxSize().padding(20.dp)) {
             // Top row: brand chip + skip.
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.clip(RoundedCornerShape(8.dp)).background(Yellow)
-                        .border(3.dp, Ink, RoundedCornerShape(8.dp))
+                        .border(3.dp, colors.border, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) { Text("REWIFI", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Ink) }
                 Spacer(Modifier.weight(1f))
@@ -114,7 +114,7 @@ fun IntroScreen(onFinish: () -> Unit) {
                     Box(
                         Modifier.clip(RoundedCornerShape(8.dp)).clickable { onFinish() }
                             .padding(horizontal = 8.dp, vertical = 6.dp)
-                    ) { Text("SKIP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Muted) }
+                    ) { Text("SKIP", fontWeight = FontWeight.Black, fontSize = 13.sp, color = colors.textSecondary) }
                 }
             }
 
@@ -134,15 +134,15 @@ fun IntroScreen(onFinish: () -> Unit) {
                     Box(
                         Modifier.padding(horizontal = 3.dp).width(w).height(10.dp)
                             .clip(RoundedCornerShape(5.dp))
-                            .background(if (active) Ink else Snow)
-                            .border(2.dp, Ink, RoundedCornerShape(5.dp))
+                            .background(if (active) Yellow else colors.surfaceVariant)
+                            .border(2.dp, colors.border, RoundedCornerShape(5.dp))
                     )
                 }
             }
 
             BrutalButton(
                 if (last) "GET STARTED" else "NEXT",
-                modifier = Modifier.fillMaxWidth(), bg = Ink, fg = Yellow
+                modifier = Modifier.fillMaxWidth(), bg = Yellow, fg = Ink
             ) {
                 if (last) onFinish()
                 else scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
@@ -153,6 +153,7 @@ fun IntroScreen(onFinish: () -> Unit) {
 
 @Composable
 private fun PageContent(page: IntroPage) {
+    val colors = RewifiTheme.colors
     Column(
         Modifier.fillMaxSize().padding(top = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -162,12 +163,12 @@ private fun PageContent(page: IntroPage) {
         Box(Modifier.size(150.dp), contentAlignment = Alignment.Center) {
             Box(
                 Modifier.size(132.dp).rotate(-6f).padding(start = 9.dp, top = 9.dp)
-                    .clip(RoundedCornerShape(30.dp)).background(Ink)
+                    .clip(RoundedCornerShape(30.dp)).background(colors.shadow)
             )
             Box(
                 Modifier.size(132.dp).rotate(-6f)
                     .clip(RoundedCornerShape(30.dp)).background(page.accent)
-                    .border(4.dp, Ink, RoundedCornerShape(30.dp)),
+                    .border(4.dp, colors.border, RoundedCornerShape(30.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(page.icon, null, tint = page.iconTint, modifier = Modifier.size(68.dp))
@@ -176,12 +177,12 @@ private fun PageContent(page: IntroPage) {
 
         Spacer(Modifier.height(36.dp))
         Text(
-            page.title, fontWeight = FontWeight.Black, fontSize = 38.sp, color = Ink,
+            page.title, fontWeight = FontWeight.Black, fontSize = 38.sp, color = colors.textPrimary,
             lineHeight = 40.sp, textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            page.body, color = Muted, fontWeight = FontWeight.Medium, fontSize = 15.sp,
+            page.body, color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 15.sp,
             lineHeight = 22.sp, textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 8.dp)
         )

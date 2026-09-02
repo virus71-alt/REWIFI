@@ -49,6 +49,7 @@ import com.rewifi.app.ui.screens.IntroScreen
 import com.rewifi.app.ui.screens.LockScreen
 import com.rewifi.app.ui.screens.NearbyScreen
 import com.rewifi.app.ui.screens.PinLockScreen
+import com.rewifi.app.ui.screens.QrCustomizeScreen
 import com.rewifi.app.ui.screens.NfcWriteScreen
 import com.rewifi.app.ui.screens.ScannerScreen
 import com.rewifi.app.ui.screens.SettingsScreen
@@ -77,6 +78,7 @@ private sealed interface Screen {
 
     data class Detail(val cred: WifiCred) : Screen
     data class NfcWrite(val cred: WifiCred) : Screen
+    data class QrCustomize(val cred: WifiCred) : Screen
 }
 
 /**
@@ -974,9 +976,20 @@ class MainActivity : FragmentActivity() {
                                         vm.showFlash("Couldn't auto-connect: ${result.reason}", ok = false)
                                     }
                                 }
+                            },
+                            onCustomizeQr = {
+                                navTo(Screen.QrCustomize(live))
                             }
                         )
                     }
+                }
+
+                is Screen.QrCustomize -> {
+                    QrCustomizeScreen(
+                        cred = screen.cred,
+                        settings = settings,
+                        onBack = { pop() }
+                    )
                 }
 
                 is Screen.NfcWrite -> {

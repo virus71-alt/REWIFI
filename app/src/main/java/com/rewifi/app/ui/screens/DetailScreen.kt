@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -66,13 +67,15 @@ fun DetailScreen(
     onDelete: () -> Unit,
     onWriteNfc: () -> Unit,
     onConnect: () -> Unit = {},
-    onToggleFavorite: (Boolean) -> Unit = {}
+    onToggleFavorite: (Boolean) -> Unit = {},
+    onCustomizeQr: () -> Unit = {}
 ) {
     val ctx = LocalContext.current
     val colors = RewifiTheme.colors
     var reveal by remember { mutableStateOf(false) }
     var bigQr by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showShareTextConfirm by remember { mutableStateOf(false) }
 
     val qr = remember(cred.id, cred.ssid, cred.password) {
         runCatching { QrGenerator.build(ctx, cred.ssid, cred.password) }.getOrNull()
@@ -91,81 +94,128 @@ fun DetailScreen(
                     .border(3.dp, colors.border, RoundedCornerShape(12.dp))
                     .clickable(onClick = onBack).padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary) }
-            Spacer(Modifier.weight(1f))
+            ) {
+                Icon(Icons.Default.ArrowBack, "Back", tint = colors.textPrimary)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 22.sp, color = colors.textPrimary, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "ADDED " + java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(cred.createdAt)).uppercase(),
+                        color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+                    )
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.surfaceVariant)
+                            .border(1.5.dp, colors.border.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            cred.category.uppercase(),
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+            }
+            // Pin / Favorite toggle button
             Box(
-                Modifier.height(44.dp).background(if (cred.isFavorite) Yellow else colors.surface, RoundedCornerShape(12.dp))
-                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
-                    .clickable { onToggleFavorite(!cred.isFavorite) }.padding(horizontal = 12.dp),
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (cred.isFavorite) Yellow else colors.surface)
+                    .border(
+                        3.dp,
+                        if (cred.isFavorite) colors.border else colors.border.copy(alpha = 0.5f),
+                        RoundedCornerShape(12.dp)
+                    )
+                    .clickable { onToggleFavorite(!cred.isFavorite) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     if (cred.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
-                    "Favorite",
-                    tint = if (cred.isFavorite) Ink else colors.textPrimary
+                    contentDescription = if (cred.isFavorite) "Unpin network" else "Pin network",
+                    tint = if (cred.isFavorite) Ink else colors.textSecondary,
+                    modifier = Modifier.size(24.dp)
                 )
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             Box(
-                Modifier.height(44.dp).background(Red, RoundedCornerShape(12.dp))
+                Modifier.size(44.dp).background(Red, RoundedCornerShape(12.dp))
                     .border(3.dp, colors.border, RoundedCornerShape(12.dp))
-                    .clickable { confirmDelete = true }.padding(horizontal = 12.dp),
+                    .clickable { confirmDelete = true },
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.Delete, "Delete", tint = Snow) }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.surfaceVariant)
-                    .border(2.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
-                Text(
-                    cred.category.uppercase(),
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 11.sp,
-                    letterSpacing = 1.sp,
-                    maxLines = 1,
-                    softWrap = false
-                )
+                Icon(Icons.Default.Delete, "Delete", tint = Snow)
             }
-            Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 32.sp, color = colors.textPrimary, maxLines = 2)
         }
 
-        // QR — scan with phone camera to join instantly (the "restore" path)
+        // QR preview card — tap to show full-screen.
         BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(20.dp)) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text("SCAN TO CONNECT", fontWeight = FontWeight.Black, fontSize = 13.sp,
-                    color = colors.textSecondary, letterSpacing = 1.sp)
-                Spacer(Modifier.height(14.dp))
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 if (qr != null) {
                     Image(
                         bitmap = qr,
                         contentDescription = "WiFi QR",
                         filterQuality = androidx.compose.ui.graphics.FilterQuality.None,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                        modifier = Modifier
+                            .size(190.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { bigQr = true }
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text("Tap to enlarge · share for guests", color = colors.textSecondary,
-                        fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Tap to enlarge",
+                            color = colors.textSecondary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            modifier = Modifier.clickable { bigQr = true }
+                        )
+                        Text("•", color = colors.textSecondary, fontSize = 12.sp)
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Yellow)
+                                .clickable { onCustomizeQr() }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text("CUSTOMIZE", color = Ink, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        }
+                    }
                 } else {
                     Text("Could not render QR", color = colors.textSecondary)
                 }
             }
         }
 
-        // Connect, Share QR, NFC tag
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BrutalButton("CONNECT", Modifier.weight(1f), bg = Yellow, fg = Ink, onClick = onConnect)
-            BrutalButton("SHARE QR", Modifier.weight(1f), bg = Green, fg = Ink) {
-                shareQrImage(ctx, cred.ssid, cred.password)
+        // Actions: Connect, Share QR, NFC tag, Share as text
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BrutalButton("CONNECT", Modifier.weight(1f), bg = Yellow, fg = Ink, onClick = onConnect)
+                BrutalButton("SHARE QR", Modifier.weight(1f), bg = Green, fg = Ink) {
+                    shareQrImage(ctx, cred.ssid, cred.password)
+                }
             }
-            BrutalButton("NFC TAG", Modifier.weight(1f), bg = colors.surface, fg = colors.textPrimary, onClick = onWriteNfc)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BrutalButton("NFC TAG", Modifier.weight(1f), bg = colors.surface, fg = colors.textPrimary, onClick = onWriteNfc)
+                BrutalButton("SHARE TEXT", Modifier.weight(1f), bg = colors.surface, fg = colors.textPrimary) {
+                    showShareTextConfirm = true
+                }
+            }
         }
 
         // Password reveal + copy
@@ -252,6 +302,18 @@ fun DetailScreen(
         }
     }
 
+    if (showShareTextConfirm) {
+        ShareTextConfirmationDialog(
+            ssid = cred.ssid,
+            password = cred.password,
+            onCancel = { showShareTextConfirm = false },
+            onConfirm = {
+                showShareTextConfirm = false
+                sharePlainText(ctx, cred.ssid, cred.password)
+            }
+        )
+    }
+
     if (bigQr && qr != null) {
         Box(
             Modifier.fillMaxSize().background(Ink.copy(alpha = 0.85f))
@@ -269,6 +331,19 @@ fun DetailScreen(
                 Spacer(Modifier.height(16.dp))
                 Text(cred.ssid, color = Snow, fontWeight = FontWeight.Black, fontSize = 20.sp)
                 Text("Point a camera here to join", color = Snow.copy(alpha = 0.7f), fontSize = 13.sp)
+                Spacer(Modifier.height(20.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Yellow)
+                        .clickable {
+                            bigQr = false
+                            onCustomizeQr()
+                        }
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    Text("CUSTOMIZE QR", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Ink)
+                }
             }
         }
     }
@@ -329,6 +404,142 @@ private fun DeleteDialog(ssid: String, onCancel: () -> Unit, onConfirm: () -> Un
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Pill("CANCEL", colors.surfaceVariant, colors.textPrimary, onCancel)
                     Pill("DELETE", Red, Snow, onConfirm)
+                }
+            }
+        }
+    }
+}
+
+/** Share WiFi details as clean plain text via Android system share sheet. */
+private fun sharePlainText(ctx: Context, ssid: String, password: String) {
+    runCatching {
+        val shareBody = buildString {
+            appendLine("WiFi: $ssid")
+            if (password.isBlank()) {
+                appendLine("Security: Open")
+                append("Password: None")
+            } else {
+                appendLine("Password: $password")
+                append("Security: WPA2")
+            }
+        }
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "WiFi: $ssid")
+            putExtra(android.content.Intent.EXTRA_TEXT, shareBody)
+        }
+        ctx.startActivity(android.content.Intent.createChooser(send, "Share WiFi as text"))
+    }.onFailure {
+        Toast.makeText(ctx, "Share failed: ${it.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+@Composable
+private fun ShareTextConfirmationDialog(
+    ssid: String,
+    password: String,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    var showPasswordPreview by remember { mutableStateOf(false) }
+
+    Box(
+        Modifier.fillMaxSize().background(Ink.copy(alpha = 0.55f))
+            .clickable(onClick = onCancel),
+        contentAlignment = Alignment.Center
+    ) {
+        BrutalCard(Modifier.fillMaxWidth().padding(24.dp), padding = PaddingValues(20.dp)) {
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    "SHARE WIFI PASSWORD?",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    color = colors.textPrimary
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "This will expose the WiFi password as plain text to another app.",
+                    color = colors.textSecondary,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(16.dp))
+
+                // Preview Card
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceVariant)
+                        .border(2.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(14.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SSID", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+                            Text(ssid, fontWeight = FontWeight.Black, fontSize = 13.sp, color = colors.textPrimary)
+                        }
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("PASSWORD", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    if (password.isBlank()) "None"
+                                    else if (showPasswordPreview) password
+                                    else "••••••••",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 13.sp,
+                                    fontFamily = if (password.isNotBlank() && !showPasswordPreview) FontFamily.Monospace else FontFamily.Default,
+                                    color = colors.textPrimary
+                                )
+                                if (password.isNotBlank()) {
+                                    Box(
+                                        Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(colors.surface)
+                                            .border(1.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                            .clickable { showPasswordPreview = !showPasswordPreview }
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            if (showPasswordPreview) "HIDE" else "SHOW",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            color = colors.textPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("SECURITY", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+                            Text(
+                                if (password.isBlank()) "Open" else "WPA2",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 13.sp,
+                                color = colors.textPrimary
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    BrutalButton("CANCEL", Modifier.weight(1f), bg = colors.surface, fg = colors.textPrimary, onClick = onCancel)
+                    BrutalButton("SHARE", Modifier.weight(1f), bg = Yellow, fg = Ink, onClick = onConfirm)
                 }
             }
         }

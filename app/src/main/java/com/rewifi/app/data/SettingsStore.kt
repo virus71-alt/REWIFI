@@ -101,6 +101,21 @@ class SettingsStore(context: Context) {
     private val _lastBackupAt = MutableStateFlow(prefs.getLong(KEY_LAST_BACKUP, 0L))
     val lastBackupAt: StateFlow<Long> = _lastBackupAt.asStateFlow()
 
+    private val _qrDarkTheme = MutableStateFlow(prefs.getBoolean(KEY_QR_DARK_THEME, false))
+    val qrDarkTheme: StateFlow<Boolean> = _qrDarkTheme.asStateFlow()
+
+    private val _qrShowLogo = MutableStateFlow(prefs.getBoolean(KEY_QR_SHOW_LOGO, true))
+    val qrShowLogo: StateFlow<Boolean> = _qrShowLogo.asStateFlow()
+
+    private val _qrShowSsid = MutableStateFlow(prefs.getBoolean(KEY_QR_SHOW_SSID, true))
+    val qrShowSsid: StateFlow<Boolean> = _qrShowSsid.asStateFlow()
+
+    private val _qrShowSecurity = MutableStateFlow(prefs.getBoolean(KEY_QR_SHOW_SECURITY, true))
+    val qrShowSecurity: StateFlow<Boolean> = _qrShowSecurity.asStateFlow()
+
+    private val _qrShowBranding = MutableStateFlow(prefs.getBoolean(KEY_QR_SHOW_BRANDING, true))
+    val qrShowBranding: StateFlow<Boolean> = _qrShowBranding.asStateFlow()
+
     private fun loadInitialLockType(): AppLockType {
         val stored = prefs.getString(KEY_APP_LOCK_TYPE, null)
         if (stored != null) {
@@ -367,6 +382,46 @@ class SettingsStore(context: Context) {
         _hasPassphrase.value = false
     }
 
+    fun setQrDarkTheme(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_QR_DARK_THEME, enabled) }
+        _qrDarkTheme.value = enabled
+    }
+
+    fun setQrShowLogo(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_QR_SHOW_LOGO, enabled) }
+        _qrShowLogo.value = enabled
+    }
+
+    fun setQrShowSsid(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_QR_SHOW_SSID, enabled) }
+        _qrShowSsid.value = enabled
+    }
+
+    fun setQrShowSecurity(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_QR_SHOW_SECURITY, enabled) }
+        _qrShowSecurity.value = enabled
+    }
+
+    fun setQrShowBranding(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_QR_SHOW_BRANDING, enabled) }
+        _qrShowBranding.value = enabled
+    }
+
+    fun resetQrStyle() {
+        prefs.edit {
+            putBoolean(KEY_QR_DARK_THEME, false)
+            putBoolean(KEY_QR_SHOW_LOGO, true)
+            putBoolean(KEY_QR_SHOW_SSID, true)
+            putBoolean(KEY_QR_SHOW_SECURITY, true)
+            putBoolean(KEY_QR_SHOW_BRANDING, true)
+        }
+        _qrDarkTheme.value = false
+        _qrShowLogo.value = true
+        _qrShowSsid.value = true
+        _qrShowSecurity.value = true
+        _qrShowBranding.value = true
+    }
+
     companion object {
         val BUILTIN_CATEGORIES = listOf("Home", "Work", "Cafe", "Hotel", "Friends", "Other")
         const val THEME_LIGHT = "light"
@@ -392,5 +447,10 @@ class SettingsStore(context: Context) {
         private const val KEY_BACKUP_PASS = "backup_passphrase_enc"
         private const val KEY_DRIVE_EMAIL = "drive_email"
         private const val KEY_LAST_BACKUP = "last_backup_at"
+        private const val KEY_QR_DARK_THEME = "qr_dark_theme"
+        private const val KEY_QR_SHOW_LOGO = "qr_show_logo"
+        private const val KEY_QR_SHOW_SSID = "qr_show_ssid"
+        private const val KEY_QR_SHOW_SECURITY = "qr_show_security"
+        private const val KEY_QR_SHOW_BRANDING = "qr_show_branding"
     }
 }

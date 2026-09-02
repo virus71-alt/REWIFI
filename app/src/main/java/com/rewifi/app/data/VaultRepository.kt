@@ -211,6 +211,50 @@ class VaultRepository(private val dao: WifiDao) {
         return changed
     }
 
+    suspend fun setFavoriteBulk(ids: Set<Long>, isFavorite: Boolean) {
+        if (ids.isEmpty()) return
+        dao.setFavoriteBulk(ids.toList(), isFavorite)
+    }
+
+    suspend fun setCategoryBulk(ids: Set<Long>, category: String) {
+        if (ids.isEmpty()) return
+        dao.setCategoryBulk(ids.toList(), category)
+    }
+
+    suspend fun deleteBulk(ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        dao.deleteBulk(ids.toList())
+    }
+
+    suspend fun exportSelectedEncrypted(
+        ids: Set<Long>,
+        passphrase: String,
+        customCategories: List<String> = emptyList()
+    ): ByteArray {
+        val items = JSONArray()
+        dao.all().filter { it.id in ids }.forEach { e ->
+            val pw = runCatching { Crypto.decrypt(e.passwordEnc) }.getOrDefault("")
+            items.put(
+                JSONObject()
+                    .put("ssid", e.ssid)
+                    .put("pw", pw)
+                    .put("note", e.note ?: "")
+                    .put("fav", e.isFavorite)
+                    .put("cat", e.category)
+                    .put("last_conn", e.lastConnectedAt ?: 0L)
+                    .put("conn_cnt", e.connectionCount)
+            )
+        }
+        val customCats = JSONArray()
+        customCategories.forEach { customCats.put(it) }
+        val json = JSONObject()
+            .put("v", 1)
+            .put("items", items)
+            .put("custom_cats", customCats)
+            .toString()
+        return BackupCrypto.encrypt(json.toByteArray(Charsets.UTF_8), passphrase.toCharArray())
+    }
+
     private fun WifiEntry.toCred(): WifiCred =
         WifiCred(id, ssid, runCatching { Crypto.decrypt(passwordEnc) }.getOrDefault("••••"), note, createdAt, isFavorite, category, lastConnectedAt, connectionCount)
 }

@@ -52,6 +52,15 @@ interface WifiDao {
     @Query("UPDATE wifi_entries SET category = :newCategory WHERE category = :oldCategory")
     suspend fun renameCategory(oldCategory: String, newCategory: String)
 
+    @Query("UPDATE wifi_entries SET isFavorite = :isFavorite WHERE id IN (:ids)")
+    suspend fun setFavoriteBulk(ids: List<Long>, isFavorite: Boolean)
+
+    @Query("UPDATE wifi_entries SET category = :category WHERE id IN (:ids)")
+    suspend fun setCategoryBulk(ids: List<Long>, category: String)
+
+    @Query("DELETE FROM wifi_entries WHERE id IN (:ids)")
+    suspend fun deleteBulk(ids: List<Long>)
+
     @Delete
     suspend fun delete(entry: WifiEntry)
 }

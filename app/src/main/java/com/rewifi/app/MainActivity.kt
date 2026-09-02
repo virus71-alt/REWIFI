@@ -25,7 +25,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
@@ -422,6 +424,7 @@ class MainActivity : FragmentActivity() {
         val pinLength by settings.pinLength.collectAsState()
         val clipboardClearSeconds by settings.clipboardClearSeconds.collectAsState()
         val showRecentNetworks by settings.showRecentNetworks.collectAsState()
+        val coroutineScope = rememberCoroutineScope()
 
         if (appLockType != AppLockType.OFF && !unlocked.value) {
             when (appLockType) {
@@ -561,6 +564,7 @@ class MainActivity : FragmentActivity() {
                     val sort by vm.vaultSort.collectAsState()
                     val categoryFilter by vm.categoryFilter.collectAsState()
                     val customCategories by vm.customCategories.collectAsState()
+                    val selectedIds by vm.selectedIds.collectAsState()
 
                     VaultScreen(
                         creds = filteredCreds,
@@ -573,6 +577,24 @@ class MainActivity : FragmentActivity() {
                         showRecentNetworks = showRecentNetworks,
                         syncState = syncState,
                         flash = flash,
+                        selectedIds = selectedIds,
+                        onToggleSelect = { vm.toggleSelect(it) },
+                        onSelectAll = { vm.selectAll(filteredCreds.map { it.id }) },
+                        onClearSelection = { vm.clearSelection() },
+                        onBulkFavorite = { vm.bulkSetFavorite(it) },
+                        onBulkCategory = { vm.bulkSetCategory(it) },
+                        onBulkDelete = { vm.bulkDelete() },
+                        onBulkExport = { passphrase ->
+                            coroutineScope.launch {
+                                runCatching {
+                                    val blob = vm.exportSelected(passphrase)
+                                    shareBackup(this@MainActivity, blob)
+                                    vm.clearSelection()
+                                }.onFailure { err ->
+                                    Toast.makeText(this@MainActivity, "Export failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
                         onSearchQueryChange = { vm.setSearchQuery(it) },
                         onFilterChange = { vm.setFilter(it) },
                         onSortChange = { vm.setSort(it) },

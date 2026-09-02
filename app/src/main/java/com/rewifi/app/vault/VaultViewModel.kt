@@ -47,6 +47,9 @@ class VaultViewModel(
     val categoryFilter: StateFlow<String> = settings.categoryFilter
     val customCategories: StateFlow<List<String>> = settings.customCategories
 
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+
     fun getAllCategories(): List<String> = settings.allCategories()
 
     private val filterConfig = combine(
@@ -106,6 +109,63 @@ class VaultViewModel(
         _searchQuery.value = ""
         settings.setVaultFilter(VaultFilter.ALL)
         settings.setCategoryFilter("ALL")
+    }
+
+    fun toggleSelect(id: Long) {
+        val current = _selectedIds.value
+        _selectedIds.value = if (id in current) current - id else current + id
+    }
+
+    fun selectAll(visibleIds: List<Long>) {
+        _selectedIds.value = _selectedIds.value + visibleIds
+    }
+
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
+
+    fun bulkSetFavorite(isFavorite: Boolean) {
+        val ids = _selectedIds.value
+        if (ids.isEmpty()) return
+        val count = ids.size
+        viewModelScope.launch {
+            repo.setFavoriteBulk(ids, isFavorite)
+            showFlash(if (isFavorite) "Pinned $count network${if (count == 1) "" else "s"}" else "Unpinned $count network${if (count == 1) "" else "s"}", ok = true)
+            clearSelection()
+            autoBackupIfEnabled()
+            driveSyncIfEnabled()
+        }
+    }
+
+    fun bulkSetCategory(category: String) {
+        val ids = _selectedIds.value
+        if (ids.isEmpty()) return
+        val count = ids.size
+        viewModelScope.launch {
+            repo.setCategoryBulk(ids, category)
+            showFlash("Moved $count network${if (count == 1) "" else "s"} to $category", ok = true)
+            clearSelection()
+            autoBackupIfEnabled()
+            driveSyncIfEnabled()
+        }
+    }
+
+    fun bulkDelete() {
+        val ids = _selectedIds.value
+        if (ids.isEmpty()) return
+        val count = ids.size
+        viewModelScope.launch {
+            repo.deleteBulk(ids)
+            showFlash("Deleted $count network${if (count == 1) "" else "s"}", ok = true)
+            clearSelection()
+            autoBackupIfEnabled()
+            driveSyncIfEnabled()
+        }
+    }
+
+    suspend fun exportSelected(passphrase: String): ByteArray {
+        val ids = _selectedIds.value
+        return repo.exportSelectedEncrypted(ids, passphrase, customCategories.value)
     }
 
     fun save(id: Long, ssid: String, password: String, note: String?, category: String = "Other") = viewModelScope.launch {

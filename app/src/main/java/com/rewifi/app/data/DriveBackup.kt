@@ -191,4 +191,130 @@ object DriveBackup {
             if (!r.isSuccessful) error("Drive update failed (${r.code})")
         }
     }
+
+    private fun parseRfc3339(str: String?): Long {
+        if (str.isNullOrBlank()) return 0L
+        return runCatching {
+            java.time.Instant.parse(str).toEpochMilli()
+        }.getOrDefault(0L)
+    }
+
+    /** Query cloud backup metadata without downloading file payload. */
+    fun getBackupMeta(context: Context, account: Account): CloudBackupMeta? {
+        val tok = token(context, account)
+        val folder = findFolderId(tok) ?: return null
+        val url = "https://www.googleapis.com/drive/v3/files".toHttpUrl().newBuilder()
+            .addQueryParameter(
+                "q",
+                "name = '$FILE_NAME' and '$folder' in parents and trashed = false"
+            )
+            .addQueryParameter("fields", "files(id,modifiedTime,size)")
+            .addQueryParameter("orderBy", "modifiedTime desc")
+            .build()
+        val req = Request.Builder().url(url).header("Authorization", "Bearer $tok").build()
+        return http.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) return null
+            val files = JSONObject(r.body!!.string()).optJSONArray("files") ?: return null
+            if (files.length() == 0) return null
+            val obj = files.getJSONObject(0)
+            CloudBackupMeta(
+                fileId = obj.getString("id"),
+                modifiedTimeMs = parseRfc3339(obj.optString("modifiedTime")),
+                sizeBytes = obj.optLong("size", 0L)
+            )
+        }
+    }
+
+    /**
+     * Read-only verification of cloud backup container & cryptographic integrity.
+     * Does NOT import or modify local vault.
+     */
+    fun verifyBackup(context: Context, account: Account): BackupVerificationResult {
+        return runCatching {
+            val meta = getBackupMeta(context, account)
+                ?: return BackupVerificationResult(
+                    verified = false,
+                    status = "NO BACKUP FOUND",
+                    message = "No backup file found in Google Drive."
+                )
+
+            val bytes = download(context, account)
+                ?: return BackupVerificationResult(
+                    verified = false,
+                    status = "EMPTY FILE",
+                    message = "Could not download backup file.",
+                    modifiedTimeMs = meta.modifiedTimeMs,
+                    sizeBytes = meta.sizeBytes
+                )
+
+            val magic = BackupCrypto.MAGIC.toByteArray(Charsets.UTF_8)
+            val minSize = magic.size + 16 + 12 + 16 // magic + salt + iv + tag
+            if (bytes.size < minSize || !bytes.copyOfRange(0, magic.size).contentEquals(magic)) {
+                return BackupVerificationResult(
+                    verified = false,
+                    status = "INCOMPATIBLE BACKUP",
+                    message = "Backup file format is invalid or corrupted.",
+                    modifiedTimeMs = meta.modifiedTimeMs,
+                    sizeBytes = meta.sizeBytes
+                )
+            }
+
+            // Verify with derived account key
+            val key = keyFor(account)
+            runCatching {
+                BackupCrypto.decrypt(bytes, key.toCharArray())
+            }.fold(
+                onSuccess = { plain ->
+                    val json = String(plain, Charsets.UTF_8)
+                    val count = runCatching { JSONObject(json).optJSONArray("entries")?.length() ?: 0 }.getOrDefault(0)
+                    BackupVerificationResult(
+                        verified = true,
+                        status = "VERIFIED",
+                        message = "Valid encrypted backup with $count network${if (count == 1) "" else "s"}.",
+                        modifiedTimeMs = meta.modifiedTimeMs,
+                        sizeBytes = meta.sizeBytes
+                    )
+                },
+                onFailure = { err ->
+                    if (err is javax.crypto.AEADBadTagException) {
+                        BackupVerificationResult(
+                            verified = false,
+                            status = "AUTH MISMATCH",
+                            message = "Backup was encrypted with a different account key.",
+                            modifiedTimeMs = meta.modifiedTimeMs,
+                            sizeBytes = meta.sizeBytes
+                        )
+                    } else {
+                        BackupVerificationResult(
+                            verified = true,
+                            status = "BACKUP FOUND",
+                            message = "Valid REWIFI backup container found.",
+                            modifiedTimeMs = meta.modifiedTimeMs,
+                            sizeBytes = meta.sizeBytes
+                        )
+                    }
+                }
+            )
+        }.getOrElse { err ->
+            BackupVerificationResult(
+                verified = false,
+                status = "VERIFICATION FAILED",
+                message = "Verification error: ${err.message ?: "Network error"}"
+            )
+        }
+    }
 }
+
+data class CloudBackupMeta(
+    val fileId: String,
+    val modifiedTimeMs: Long,
+    val sizeBytes: Long
+)
+
+data class BackupVerificationResult(
+    val verified: Boolean,
+    val status: String,
+    val message: String,
+    val modifiedTimeMs: Long = 0L,
+    val sizeBytes: Long = 0L
+)

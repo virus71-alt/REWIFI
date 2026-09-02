@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.rewifi.app.data.DriveAuth
 import com.rewifi.app.data.DriveBackup
+import com.rewifi.app.data.CloudBackupMeta
+import com.rewifi.app.data.BackupVerificationResult
 import com.rewifi.app.data.SettingsStore
 import com.rewifi.app.data.VaultRepository
 import com.rewifi.app.data.WifiCred
@@ -247,26 +249,40 @@ class VaultViewModel(
     // --- Google Drive sync -------------------------------------------------
 
     /** Upload the encrypted vault to Drive. No-op if Drive isn't connected or the vault is empty. */
+    private fun mapSafeError(e: Throwable): String = when {
+        e is java.net.UnknownHostException || e is java.net.SocketTimeoutException -> "Network unavailable"
+        e.message?.contains("401") == true || e.message?.contains("403") == true -> "Drive authentication required"
+        e.message?.contains("empty", ignoreCase = true) == true -> "Vault is empty"
+        else -> e.message?.take(50) ?: "Backup upload failed"
+    }
+
     fun syncToDriveNow() = viewModelScope.launch(Dispatchers.IO) {
+        val account = DriveAuth.account(appContext) ?: return@launch
+        if (repo.count() == 0) return@launch
+        settings.recordBackupAttempt("VAULT_CHANGE")
         runCatching {
-            val account = DriveAuth.account(appContext) ?: return@launch
-            // Never overwrite a real Drive backup with an empty vault (e.g. right after a reinstall).
-            if (repo.count() == 0) return@launch
             DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account), settings.customCategories.value))
-            settings.setLastBackupAt(System.currentTimeMillis())
+            settings.recordBackupSuccess("VAULT_CHANGE")
+        }.onFailure { err ->
+            settings.recordBackupFailure("VAULT_CHANGE", mapSafeError(err))
         }
     }
 
     /** Manual "Sync now" — uploads immediately and reports a user-facing result. */
     fun syncNow(onDone: (String) -> Unit) = viewModelScope.launch {
         val msg = withContext(Dispatchers.IO) {
+            settings.recordBackupAttempt("MANUAL")
             runCatching {
                 val account = DriveAuth.account(appContext) ?: error("Connect Google Drive first")
                 if (repo.count() == 0) error("Vault is empty — nothing to back up")
                 DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account), settings.customCategories.value))
-                settings.setLastBackupAt(System.currentTimeMillis())
-                "Synced to Drive"
-            }.getOrElse { "Sync failed: ${it.message}" }
+                settings.recordBackupSuccess("MANUAL")
+                "Backup complete"
+            }.getOrElse {
+                val reason = mapSafeError(it)
+                settings.recordBackupFailure("MANUAL", reason)
+                "Backup failed: $reason"
+            }
         }
         onDone(msg)
     }
@@ -290,17 +306,34 @@ class VaultViewModel(
     fun triggerSync() = viewModelScope.launch {
         if (_syncState.value == SyncState.SYNCING) return@launch
         _syncState.value = SyncState.SYNCING
+        settings.recordBackupAttempt("MANUAL")
         val ok = withContext(Dispatchers.IO) {
             runCatching {
                 val account = DriveAuth.account(appContext) ?: error("Connect Google Drive first")
                 if (repo.count() == 0) error("Vault is empty — nothing to back up")
                 DriveBackup.upload(appContext, account, repo.exportEncrypted(DriveBackup.keyFor(account), settings.customCategories.value))
-                settings.setLastBackupAt(System.currentTimeMillis())
+                settings.recordBackupSuccess("MANUAL")
+            }.onFailure {
+                settings.recordBackupFailure("MANUAL", mapSafeError(it))
             }.isSuccess
         }
         _syncState.value = if (ok) SyncState.SYNCED else SyncState.FAILED
         delay(1400)
         _syncState.value = SyncState.IDLE
+    }
+
+    suspend fun getCloudBackupMeta(): CloudBackupMeta? = withContext(Dispatchers.IO) {
+        val account = DriveAuth.account(appContext) ?: return@withContext null
+        DriveBackup.getBackupMeta(appContext, account)
+    }
+
+    suspend fun verifyCloudBackup(): BackupVerificationResult = withContext(Dispatchers.IO) {
+        val account = DriveAuth.account(appContext) ?: return@withContext BackupVerificationResult(
+            verified = false,
+            status = "NOT CONNECTED",
+            message = "Google Drive is not connected."
+        )
+        DriveBackup.verifyBackup(appContext, account)
     }
 
     private fun driveSyncIfEnabled() {

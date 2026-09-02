@@ -800,59 +800,35 @@ class MainActivity : FragmentActivity() {
                 }
 
                 is Screen.Backup -> {
-
-                    val context =
-                        LocalContext.current
+                    val context = LocalContext.current
 
                     BackupScreen(
-
-                        onBack = {
-                            pop()
+                        settings = settings,
+                        onBack = { pop() },
+                        onBackupNow = { onDone ->
+                            vm.syncNow(onDone)
                         },
-
+                        onRestoreDrive = { onDone ->
+                            vm.restoreFromDrive(onDone)
+                        },
+                        onVerifyBackup = {
+                            vm.verifyCloudBackup()
+                        },
+                        onFetchCloudMeta = {
+                            vm.getCloudBackupMeta()
+                        },
                         onExport = { passphrase ->
-
-                            vm.exportBytes(
-                                passphrase
-                            ) {
-                                    bytes,
-                                    error ->
-
-                                if (
-                                    bytes != null
-                                ) {
-
-                                    shareBackup(
-                                        context,
-                                        bytes
-                                    )
-
+                            vm.exportBytes(passphrase) { bytes, error ->
+                                if (bytes != null) {
+                                    shareBackup(context, bytes)
                                 } else {
-
-                                    Toast.makeText(
-                                        context,
-                                        error,
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    Toast.makeText(context, error, Toast.LENGTH_LONG).show()
                                 }
                             }
                         },
-
-                        onImport = {
-                                uri,
-                                passphrase ->
-
-                            vm.importFrom(
-                                context.contentResolver,
-                                uri,
-                                passphrase
-                            ) {
-
-                                Toast.makeText(
-                                    context,
-                                    it,
-                                    Toast.LENGTH_LONG
-                                ).show()
+                        onImport = { uri, passphrase ->
+                            vm.importFrom(context.contentResolver, uri, passphrase) {
+                                Toast.makeText(context, it, Toast.LENGTH_LONG).show()
                             }
                         }
                     )

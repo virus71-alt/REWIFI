@@ -31,12 +31,18 @@ class DriveBackupWorker(
         // Don't let the daily job overwrite a real Drive backup with an empty vault.
         if (app.repository.count() == 0) return Result.success()
         return try {
+            app.settings.recordBackupAttempt("AUTOMATIC")
             val bytes = app.repository.exportEncrypted(DriveBackup.keyFor(account))
             DriveBackup.upload(applicationContext, account, bytes)
-            app.settings.setLastBackupAt(System.currentTimeMillis())
+            app.settings.recordBackupSuccess("AUTOMATIC")
             Result.success()
         } catch (e: Exception) {
-            // Network blip / transient Drive error — let WorkManager retry with backoff.
+            val safeMsg = when {
+                e is java.net.UnknownHostException || e is java.net.SocketTimeoutException -> "Network unavailable"
+                e.message?.contains("401") == true || e.message?.contains("403") == true -> "Drive authentication required"
+                else -> "Upload failed"
+            }
+            app.settings.recordBackupFailure("AUTOMATIC", safeMsg)
             Result.retry()
         }
     }

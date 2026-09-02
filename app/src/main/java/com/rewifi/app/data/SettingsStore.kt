@@ -18,6 +18,32 @@ enum class AppLockType {
     PIN_AND_BIOMETRIC
 }
 
+enum class BackupHealthStatus(val label: String) {
+    PROTECTED("PROTECTED"),
+    BACKUP_DUE("BACKUP DUE"),
+    BACKUP_FAILED("BACKUP FAILED"),
+    DRIVE_NOT_CONNECTED("DRIVE NOT CONNECTED"),
+    NEVER_BACKED_UP("NEVER BACKED UP"),
+    AUTO_BACKUP_OFF("AUTO BACKUP OFF")
+}
+
+data class BackupHistoryItem(
+    val timestamp: Long,
+    val trigger: String,
+    val success: Boolean,
+    val failureReason: String? = null
+)
+
+data class BackupHealthInfo(
+    val status: BackupHealthStatus,
+    val lastSuccessfulAt: Long,
+    val lastAttemptAt: Long,
+    val lastAttemptSuccess: Boolean,
+    val failureReason: String?,
+    val autoBackupEnabled: Boolean,
+    val driveEmail: String?
+)
+
 /**
  * Tiny SharedPreferences-backed settings, surfaced as [StateFlow]s so Compose
  * re-reads them reactively. Everything defaults to off — the app lock is fully
@@ -115,6 +141,21 @@ class SettingsStore(context: Context) {
 
     private val _qrShowBranding = MutableStateFlow(prefs.getBoolean(KEY_QR_SHOW_BRANDING, true))
     val qrShowBranding: StateFlow<Boolean> = _qrShowBranding.asStateFlow()
+
+    private val _lastBackupAttemptAt = MutableStateFlow(prefs.getLong(KEY_LAST_BACKUP_ATTEMPT, 0L))
+    val lastBackupAttemptAt: StateFlow<Long> = _lastBackupAttemptAt.asStateFlow()
+
+    private val _lastBackupSuccess = MutableStateFlow(prefs.getBoolean(KEY_LAST_BACKUP_SUCCESS, true))
+    val lastBackupSuccess: StateFlow<Boolean> = _lastBackupSuccess.asStateFlow()
+
+    private val _lastBackupFailureReason = MutableStateFlow(prefs.getString(KEY_LAST_BACKUP_FAILURE_REASON, null))
+    val lastBackupFailureReason: StateFlow<String?> = _lastBackupFailureReason.asStateFlow()
+
+    private val _lastBackupTrigger = MutableStateFlow(prefs.getString(KEY_LAST_BACKUP_TRIGGER, "AUTOMATIC") ?: "AUTOMATIC")
+    val lastBackupTrigger: StateFlow<String> = _lastBackupTrigger.asStateFlow()
+
+    private val _backupHistory = MutableStateFlow(loadBackupHistory())
+    val backupHistory: StateFlow<List<BackupHistoryItem>> = _backupHistory.asStateFlow()
 
     private fun loadInitialLockType(): AppLockType {
         val stored = prefs.getString(KEY_APP_LOCK_TYPE, null)
@@ -422,10 +463,118 @@ class SettingsStore(context: Context) {
         _qrShowBranding.value = true
     }
 
+    private fun loadBackupHistory(): List<BackupHistoryItem> {
+        val raw = prefs.getString(KEY_BACKUP_HISTORY, null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { idx ->
+                val obj = arr.getJSONObject(idx)
+                BackupHistoryItem(
+                    timestamp = obj.getLong("ts"),
+                    trigger = obj.getString("trigger"),
+                    success = obj.getBoolean("success"),
+                    failureReason = obj.optString("reason").takeIf { it.isNotBlank() }
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun saveBackupHistory(list: List<BackupHistoryItem>) {
+        val bounded = list.take(10)
+        val arr = JSONArray()
+        bounded.forEach { item ->
+            val obj = JSONObject()
+                .put("ts", item.timestamp)
+                .put("trigger", item.trigger)
+                .put("success", item.success)
+            if (item.failureReason != null) {
+                obj.put("reason", item.failureReason)
+            }
+            arr.put(obj)
+        }
+        prefs.edit { putString(KEY_BACKUP_HISTORY, arr.toString()) }
+        _backupHistory.value = bounded
+    }
+
+    fun recordBackupAttempt(trigger: String, timestamp: Long = System.currentTimeMillis()) {
+        prefs.edit {
+            putLong(KEY_LAST_BACKUP_ATTEMPT, timestamp)
+            putString(KEY_LAST_BACKUP_TRIGGER, trigger)
+        }
+        _lastBackupAttemptAt.value = timestamp
+        _lastBackupTrigger.value = trigger
+    }
+
+    fun recordBackupSuccess(trigger: String, timestamp: Long = System.currentTimeMillis()) {
+        prefs.edit {
+            putLong(KEY_LAST_BACKUP, timestamp)
+            putLong(KEY_LAST_BACKUP_ATTEMPT, timestamp)
+            putBoolean(KEY_LAST_BACKUP_SUCCESS, true)
+            remove(KEY_LAST_BACKUP_FAILURE_REASON)
+            putString(KEY_LAST_BACKUP_TRIGGER, trigger)
+        }
+        _lastBackupAt.value = timestamp
+        _lastBackupAttemptAt.value = timestamp
+        _lastBackupSuccess.value = true
+        _lastBackupFailureReason.value = null
+        _lastBackupTrigger.value = trigger
+
+        val currentHistory = _backupHistory.value.toMutableList()
+        currentHistory.add(0, BackupHistoryItem(timestamp, trigger, true))
+        saveBackupHistory(currentHistory)
+    }
+
+    fun recordBackupFailure(trigger: String, reason: String, timestamp: Long = System.currentTimeMillis()) {
+        prefs.edit {
+            putLong(KEY_LAST_BACKUP_ATTEMPT, timestamp)
+            putBoolean(KEY_LAST_BACKUP_SUCCESS, false)
+            putString(KEY_LAST_BACKUP_FAILURE_REASON, reason)
+            putString(KEY_LAST_BACKUP_TRIGGER, trigger)
+        }
+        _lastBackupAttemptAt.value = timestamp
+        _lastBackupSuccess.value = false
+        _lastBackupFailureReason.value = reason
+        _lastBackupTrigger.value = trigger
+
+        val currentHistory = _backupHistory.value.toMutableList()
+        currentHistory.add(0, BackupHistoryItem(timestamp, trigger, false, reason))
+        saveBackupHistory(currentHistory)
+    }
+
+    fun computeBackupHealth(): BackupHealthInfo {
+        val email = _driveEmail.value
+        val autoBackup = _autoBackup.value
+        val lastSuccess = _lastBackupAt.value
+        val lastAttempt = _lastBackupAttemptAt.value
+        val lastSuccessBool = _lastBackupSuccess.value
+        val reason = _lastBackupFailureReason.value
+        val now = System.currentTimeMillis()
+
+        val status = when {
+            email.isNullOrBlank() -> BackupHealthStatus.DRIVE_NOT_CONNECTED
+            !lastSuccessBool && lastAttempt > lastSuccess -> BackupHealthStatus.BACKUP_FAILED
+            lastSuccess <= 0L -> BackupHealthStatus.NEVER_BACKED_UP
+            !autoBackup -> BackupHealthStatus.AUTO_BACKUP_OFF
+            now - lastSuccess > STALE_BACKUP_THRESHOLD_MS -> BackupHealthStatus.BACKUP_DUE
+            else -> BackupHealthStatus.PROTECTED
+        }
+
+        return BackupHealthInfo(
+            status = status,
+            lastSuccessfulAt = lastSuccess,
+            lastAttemptAt = lastAttempt,
+            lastAttemptSuccess = lastSuccessBool,
+            failureReason = reason,
+            autoBackupEnabled = autoBackup,
+            driveEmail = email
+        )
+    }
+
     companion object {
         val BUILTIN_CATEGORIES = listOf("Home", "Work", "Cafe", "Hotel", "Friends", "Other")
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
+        const val STALE_BACKUP_THRESHOLD_MS = 48 * 60 * 60 * 1000L // 48 hours
         private const val KEY_APP_THEME = "app_theme"
         private const val KEY_VAULT_SORT = "vault_sort"
         private const val KEY_VAULT_FILTER = "vault_filter"
@@ -452,5 +601,10 @@ class SettingsStore(context: Context) {
         private const val KEY_QR_SHOW_SSID = "qr_show_ssid"
         private const val KEY_QR_SHOW_SECURITY = "qr_show_security"
         private const val KEY_QR_SHOW_BRANDING = "qr_show_branding"
+        private const val KEY_LAST_BACKUP_ATTEMPT = "last_backup_attempt_at"
+        private const val KEY_LAST_BACKUP_SUCCESS = "last_backup_success"
+        private const val KEY_LAST_BACKUP_FAILURE_REASON = "last_backup_failure_reason"
+        private const val KEY_LAST_BACKUP_TRIGGER = "last_backup_trigger"
+        private const val KEY_BACKUP_HISTORY = "backup_history_json"
     }
 }

@@ -129,6 +129,28 @@ class VaultViewModel(
         driveSyncIfEnabled()
     }
 
+    fun findDuplicates(ssid: String, excludeId: Long = 0L): List<WifiCred> {
+        val clean = ssid.trim()
+        if (clean.isEmpty()) return emptyList()
+        return creds.value.filter {
+            it.id != excludeId && it.ssid.trim().equals(clean, ignoreCase = true)
+        }
+    }
+
+    fun updateExisting(
+        targetId: Long,
+        newPassword: String,
+        newNote: String?,
+        newCategory: String? = null,
+        onDone: () -> Unit = {}
+    ) = viewModelScope.launch {
+        repo.updateExisting(targetId, newPassword, newNote, newCategory)
+        settings.recordUpdated(targetId, System.currentTimeMillis())
+        autoBackupIfEnabled()
+        driveSyncIfEnabled()
+        onDone()
+    }
+
     /** Save a freshly scanned network (deduped by SSID) and kick off a Drive sync. */
     fun saveScanned(ssid: String, password: String, onDone: (added: Boolean) -> Unit = {}) =
         viewModelScope.launch {

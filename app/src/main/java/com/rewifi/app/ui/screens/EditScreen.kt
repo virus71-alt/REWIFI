@@ -41,6 +41,7 @@ import com.rewifi.app.data.WifiCred
 import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
 import com.rewifi.app.ui.components.BrutalField
+import com.rewifi.app.ui.components.DuplicateNetworkDialog
 import com.rewifi.app.ui.theme.Ink
 import com.rewifi.app.ui.theme.Red
 import com.rewifi.app.ui.theme.RewifiTheme
@@ -54,6 +55,8 @@ fun EditScreen(
     onBack: () -> Unit,
     onSave: (id: Long, ssid: String, password: String, note: String?, category: String) -> Unit,
     onCreateCategory: (String) -> Boolean,
+    onCheckDuplicates: (ssid: String, excludeId: Long) -> List<WifiCred> = { _, _ -> emptyList() },
+    onUpdateExisting: (targetId: Long, password: String, note: String?, category: String?) -> Unit = { _, _, _, _ -> },
     prefillSsid: String? = null,
     prefillPass: String? = null
 ) {
@@ -65,6 +68,7 @@ fun EditScreen(
     var showNewCategoryDialog by remember { mutableStateOf(false) }
     var newCategoryText by remember { mutableStateOf("") }
     var newCategoryError by remember { mutableStateOf<String?>(null) }
+    var pendingDuplicates by remember { mutableStateOf<List<WifiCred>?>(null) }
     val valid = ssid.isNotBlank() && pass.isNotBlank()
 
     Column(
@@ -153,8 +157,40 @@ fun EditScreen(
             bg = if (valid) Yellow else colors.surfaceVariant,
             fg = if (valid) Ink else colors.textSecondary
         ) {
-            if (valid) { onSave(existing?.id ?: 0L, ssid, pass, note, selectedCategory); onBack() }
+            if (valid) {
+                val cleanSsid = ssid.trim()
+                val duplicates = onCheckDuplicates(cleanSsid, existing?.id ?: 0L)
+                if (duplicates.isNotEmpty()) {
+                    pendingDuplicates = duplicates
+                } else {
+                    onSave(existing?.id ?: 0L, cleanSsid, pass, note.ifBlank { null }, selectedCategory)
+                    onBack()
+                }
+            }
         }
+    }
+
+    if (pendingDuplicates != null) {
+        DuplicateNetworkDialog(
+            newSsid = ssid.trim(),
+            newPassword = pass,
+            newCategory = selectedCategory,
+            newNote = note.ifBlank { null },
+            existingMatches = pendingDuplicates!!,
+            onUpdateExisting = { targetCred ->
+                onUpdateExisting(targetCred.id, pass, note.ifBlank { null }, selectedCategory)
+                pendingDuplicates = null
+                onBack()
+            },
+            onSaveAsNew = {
+                onSave(0L, ssid.trim(), pass, note.ifBlank { null }, selectedCategory)
+                pendingDuplicates = null
+                onBack()
+            },
+            onCancel = {
+                pendingDuplicates = null
+            }
+        )
     }
 
     if (showNewCategoryDialog) {

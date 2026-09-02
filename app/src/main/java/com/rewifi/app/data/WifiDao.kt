@@ -25,6 +25,9 @@ interface WifiDao {
     @Query("SELECT * FROM wifi_entries WHERE ssid = :ssid LIMIT 1")
     suspend fun bySsid(ssid: String): WifiEntry?
 
+    @Query("SELECT * FROM wifi_entries WHERE LOWER(TRIM(ssid)) = LOWER(TRIM(:ssid))")
+    suspend fun findBySsidIgnoreCase(ssid: String): List<WifiEntry>
+
     @Query("SELECT * FROM wifi_entries WHERE id = :id")
     suspend fun byId(id: Long): WifiEntry?
 

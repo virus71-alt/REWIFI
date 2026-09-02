@@ -61,6 +61,32 @@ class VaultRepository(private val dao: WifiDao) {
         return true
     }
 
+    suspend fun findDuplicates(ssid: String, excludeId: Long = 0L): List<WifiCred> {
+        val clean = ssid.trim()
+        if (clean.isEmpty()) return emptyList()
+        return dao.findBySsidIgnoreCase(clean)
+            .filter { it.id != excludeId }
+            .map { it.toCred() }
+    }
+
+    suspend fun updateExisting(
+        targetId: Long,
+        newPassword: String,
+        newNote: String?,
+        newCategory: String? = null
+    ): Boolean {
+        val existing = dao.byId(targetId) ?: return false
+        val updatedNote = if (!newNote.isNullOrBlank()) newNote.trim() else existing.note
+        val updatedCategory = if (!newCategory.isNullOrBlank() && newCategory != "Other") newCategory else existing.category
+        val updatedEntry = existing.copy(
+            passwordEnc = Crypto.encrypt(newPassword),
+            note = updatedNote,
+            category = updatedCategory
+        )
+        dao.update(updatedEntry)
+        return true
+    }
+
     /** Decrypt the whole vault and re-pack as a plaintext JSON snapshot. */
     private suspend fun snapshotJson(customCategories: List<String> = emptyList()): String {
         val items = JSONArray()

@@ -38,6 +38,7 @@ import com.rewifi.app.data.DriveBackupWorker
 import com.rewifi.app.data.SettingsStore
 import com.rewifi.app.data.WifiConnector
 import com.rewifi.app.data.WifiCred
+import com.rewifi.app.ui.components.DuplicateNetworkDialog
 import com.rewifi.app.ui.screens.BackupScreen
 import com.rewifi.app.ui.screens.DetailScreen
 import com.rewifi.app.ui.screens.EditScreen
@@ -557,61 +558,73 @@ class MainActivity : FragmentActivity() {
                 }
 
                 is Screen.Scan -> {
+                    var scanDuplicates by remember { mutableStateOf<List<WifiCred>?>(null) }
+                    var scannedPending by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+
+                    fun connectAndFlash(sSsid: String, sPass: String, sSec: String) {
+                        val result = WifiConnector.connect(this@MainActivity, sSsid, sPass, sSec)
+                        when (result) {
+                            is WifiConnector.Result.Connected -> {
+                                vm.showFlash("Connected to $sSsid · saved", ok = true)
+                            }
+                            is WifiConnector.Result.PromptShown -> {
+                                vm.showFlash("Saved $sSsid · tap Save to connect", ok = true)
+                            }
+                            is WifiConnector.Result.Failed -> {
+                                vm.showFlash("Saved $sSsid · couldn't auto-connect", ok = false)
+                            }
+                        }
+                    }
 
                     ScannerScreen(
-
                         onBack = {
                             pop()
                         },
-
-                        onResult = {
-                                ssid,
-                                pass,
-                                security ->
-
-                            pop()
-
-                            vm.saveScanned(
-                                ssid,
-                                pass
-                            )
-
-                            val result =
-                                WifiConnector.connect(
-                                    this@MainActivity,
-                                    ssid,
-                                    pass,
-                                    security
-                                )
-
-                            when (result) {
-
-                                is WifiConnector.Result.Connected -> {
-
-                                    vm.showFlash(
-                                        "Connected to $ssid · saved",
-                                        ok = true
-                                    )
-                                }
-
-                                is WifiConnector.Result.PromptShown -> {
-
-                                    vm.showFlash(
-                                        "Saved $ssid · tap Save to connect",
-                                        ok = true
-                                    )
-                                }
-
-                                is WifiConnector.Result.Failed -> {
-
-                                    vm.showFlash(
-                                        "Saved $ssid · couldn't auto-connect",
-                                        ok = false
-                                    )
-                                }
+                        onResult = { ssid, pass, security ->
+                            val cleanSsid = ssid.trim()
+                            val duplicates = vm.findDuplicates(cleanSsid)
+                            if (duplicates.isNotEmpty()) {
+                                scannedPending = Triple(cleanSsid, pass, security)
+                                scanDuplicates = duplicates
+                            } else {
+                                pop()
+                                vm.saveScanned(cleanSsid, pass)
+                                connectAndFlash(cleanSsid, pass, security)
                             }
                         }
                     )
+
+                    if (scanDuplicates != null && scannedPending != null) {
+                        val (sSsid, sPass, sSec) = scannedPending!!
+                        DuplicateNetworkDialog(
+                            newSsid = sSsid,
+                            newPassword = sPass,
+                            newSecurity = sSec,
+                            newCategory = "Other",
+                            newNote = null,
+                            existingMatches = scanDuplicates!!,
+                            onUpdateExisting = { targetCred ->
+                                val targetId = targetCred.id
+                                scanDuplicates = null
+                                scannedPending = null
+                                pop()
+                                vm.updateExisting(targetId, sPass, null, null) {
+                                    connectAndFlash(sSsid, sPass, sSec)
+                                }
+                            },
+                            onSaveAsNew = {
+                                scanDuplicates = null
+                                scannedPending = null
+                                pop()
+                                vm.save(0L, sSsid, sPass, null, "Other")
+                                connectAndFlash(sSsid, sPass, sSec)
+                            },
+                            onCancel = {
+                                scanDuplicates = null
+                                scannedPending = null
+                            }
+                        )
+                    }
                 }
 
                 is Screen.Settings -> {
@@ -832,6 +845,14 @@ class MainActivity : FragmentActivity() {
 
                         onCreateCategory = {
                             vm.addCategory(it)
+                        },
+
+                        onCheckDuplicates = { ssid, excludeId ->
+                            vm.findDuplicates(ssid, excludeId)
+                        },
+
+                        onUpdateExisting = { targetId, pass, note, category ->
+                            vm.updateExisting(targetId, pass, note, category)
                         },
 
                         prefillSsid =

@@ -105,6 +105,7 @@ fun VaultScreen(
     onOpen: (WifiCred) -> Unit,
     onBackup: () -> Unit,
     onScan: () -> Unit,
+    onNearby: () -> Unit,
     onSettings: () -> Unit,
     onSync: () -> Unit
 ) {
@@ -132,6 +133,11 @@ fun VaultScreen(
                     onSettings = onSettings,
                     onSync = onSync
                 )
+            }
+
+            // Nearby WiFi discovery banner
+            item {
+                NearbyWifiBanner(onClick = onNearby)
             }
 
             // Always show search + filter bar if vault has entries or user is currently searching/filtering
@@ -191,7 +197,8 @@ fun VaultScreen(
             AddMenu(
                 onDismiss = { showAddMenu = false },
                 onManual = { showAddMenu = false; onAdd() },
-                onScan = { showAddMenu = false; onScan() }
+                onScan = { showAddMenu = false; onScan() },
+                onNearby = { showAddMenu = false; onNearby() }
             )
         }
 
@@ -630,15 +637,71 @@ private fun StatusBubble(icon: ImageVector, bg: Color, iconTint: Color) {
 
 /** Bottom-anchored chooser shown when the + is tapped. */
 @Composable
-private fun AddMenu(onDismiss: () -> Unit, onManual: () -> Unit, onScan: () -> Unit) {
+private fun AddMenu(onDismiss: () -> Unit, onManual: () -> Unit, onScan: () -> Unit, onNearby: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Ink.copy(alpha = 0.45f)).clickable(onClick = onDismiss)) {
         Column(
             Modifier.align(Alignment.BottomEnd).padding(24.dp).padding(bottom = 78.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            AddOption(Icons.Default.Wifi, "NEARBY WIFI", Green, Ink, onNearby)
             AddOption(Icons.Default.PhotoCamera, "SCAN QR", Blue, Snow, onScan)
             AddOption(Icons.Default.Edit, "ADD MANUALLY", Yellow, Ink, onManual)
+        }
+    }
+}
+
+@Composable
+private fun NearbyWifiBanner(onClick: () -> Unit) {
+    val colors = RewifiTheme.colors
+    BrutalCard(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        padding = PaddingValues(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Yellow)
+                    .border(2.5.dp, colors.border, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Wifi, null, tint = Ink, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "NEARBY WIFI",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    color = colors.textPrimary,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "Find and connect to networks around you",
+                    fontSize = 12.sp,
+                    color = colors.textSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceVariant)
+                    .border(1.5.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    "SCAN",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    color = colors.textPrimary
+                )
+            }
         }
     }
 }

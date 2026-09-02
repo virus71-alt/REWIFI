@@ -45,6 +45,7 @@ import com.rewifi.app.ui.screens.DetailScreen
 import com.rewifi.app.ui.screens.EditScreen
 import com.rewifi.app.ui.screens.IntroScreen
 import com.rewifi.app.ui.screens.LockScreen
+import com.rewifi.app.ui.screens.NearbyScreen
 import com.rewifi.app.ui.screens.PinLockScreen
 import com.rewifi.app.ui.screens.NfcWriteScreen
 import com.rewifi.app.ui.screens.ScannerScreen
@@ -64,6 +65,7 @@ private sealed interface Screen {
     data object Settings : Screen
     data object Setup : Screen
     data object Scan : Screen
+    data object Nearby : Screen
 
     data class Edit(
         val cred: WifiCred?,
@@ -581,6 +583,7 @@ class MainActivity : FragmentActivity() {
                         onOpen = { navTo(Screen.Detail(it)) },
                         onBackup = { navTo(Screen.Backup) },
                         onScan = { navTo(Screen.Scan) },
+                        onNearby = { navTo(Screen.Nearby) },
                         onSettings = { navTo(Screen.Settings) },
                         onSync = {
                             if (settings.driveEmail.value == null) {
@@ -969,6 +972,34 @@ class MainActivity : FragmentActivity() {
 
                         onBack = {
                             pop()
+                        }
+                    )
+                }
+
+                is Screen.Nearby -> {
+                    NearbyScreen(
+                        vaultCreds = creds,
+                        onBack = { pop() },
+                        onConnectToNetwork = { ssid, cred ->
+                            val result = WifiConnector.connect(this@MainActivity, cred.ssid, cred.password, "")
+                            when (result) {
+                                is WifiConnector.Result.Connected -> {
+                                    vm.recordConnection(cred.id)
+                                    vm.showFlash("Connected to ${cred.ssid}", ok = true)
+                                }
+                                is WifiConnector.Result.PromptShown -> {
+                                    vm.showFlash("Tap Save to connect", ok = true)
+                                }
+                                is WifiConnector.Result.Failed -> {
+                                    vm.showFlash("Couldn't auto-connect: ${result.reason}", ok = false)
+                                }
+                            }
+                        },
+                        onAddNetwork = { ssid ->
+                            navTo(Screen.Edit(cred = null, prefillSsid = ssid))
+                        },
+                        onOpenCredDetail = { cred ->
+                            navTo(Screen.Detail(cred))
                         }
                     )
                 }

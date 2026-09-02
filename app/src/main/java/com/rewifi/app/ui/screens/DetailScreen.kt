@@ -54,10 +54,12 @@ import com.rewifi.app.ui.theme.Red
 import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Snow
 import com.rewifi.app.ui.theme.Yellow
+import com.rewifi.app.vault.ClipboardCleaner
 
 @Composable
 fun DetailScreen(
     cred: WifiCred,
+    clipboardClearSeconds: Int = 30,
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -176,7 +178,9 @@ fun DetailScreen(
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Pill(if (reveal) "HIDE" else "REVEAL", colors.surface, colors.textPrimary) { reveal = !reveal }
-                    Pill("COPY", Green, Ink) { copy(ctx, cred.password) }
+                    Pill("COPY", Green, Ink) {
+                        ClipboardCleaner.copyPassword(ctx, cred.password, clipboardClearSeconds)
+                    }
                 }
             }
         }
@@ -284,10 +288,4 @@ private fun DeleteDialog(ssid: String, onCancel: () -> Unit, onConfirm: () -> Un
             }
         }
     }
-}
-
-private fun copy(ctx: Context, text: String) {
-    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    cm.setPrimaryClip(ClipData.newPlainText("wifi password", text))
-    Toast.makeText(ctx, "Password copied", Toast.LENGTH_SHORT).show()
 }

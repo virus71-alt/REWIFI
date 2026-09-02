@@ -418,6 +418,7 @@ class MainActivity : FragmentActivity() {
         val appLockType by settings.appLockType.collectAsState()
         val hasPin by settings.hasPin.collectAsState()
         val pinLength by settings.pinLength.collectAsState()
+        val clipboardClearSeconds by settings.clipboardClearSeconds.collectAsState()
 
         if (appLockType != AppLockType.OFF && !unlocked.value) {
             when (appLockType) {
@@ -682,12 +683,14 @@ class MainActivity : FragmentActivity() {
                         backupConfigured = driveEmail != null,
                         biometricAvailable = BiometricLock.isAvailable(this@MainActivity),
                         customCategories = customCategories,
+                        clipboardClearSeconds = clipboardClearSeconds,
                         onBack = { pop() },
                         onSelectTheme = { settings.setAppTheme(it) },
                         onSetAppLockType = { settings.setAppLockType(it) },
                         onSetPin = { pin, len -> settings.setPin(pin, len) },
                         onVerifyPin = { settings.verifyPin(it) },
                         onClearPin = { settings.clearPin() },
+                        onSelectClipboardClearSeconds = { settings.setClipboardClearSeconds(it) },
 
                         onCycleAutoLock = {
 
@@ -895,9 +898,8 @@ class MainActivity : FragmentActivity() {
                     } else {
 
                         DetailScreen(
-
                             cred = live,
-
+                            clipboardClearSeconds = clipboardClearSeconds,
                             onBack = {
                                 pop()
                             },

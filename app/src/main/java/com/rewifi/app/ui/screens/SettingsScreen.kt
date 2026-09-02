@@ -65,6 +65,7 @@ fun SettingsScreen(
     backupConfigured: Boolean,
     biometricAvailable: Boolean,
     customCategories: List<String>,
+    clipboardClearSeconds: Int = 30,
     onBack: () -> Unit,
     onSelectTheme: (String) -> Unit,
     onSetAppLockType: (AppLockType) -> Unit,
@@ -72,6 +73,7 @@ fun SettingsScreen(
     onVerifyPin: (String) -> Boolean,
     onClearPin: () -> Unit,
     onCycleAutoLock: () -> Unit,
+    onSelectClipboardClearSeconds: (Int) -> Unit = {},
     onOpenBackupSetup: () -> Unit,
     onCreateCategory: (String) -> Boolean,
     onRenameCategory: (String, String) -> Boolean,
@@ -148,6 +150,11 @@ fun SettingsScreen(
                     pinDialogMode = PinSetupMode.VERIFY_TO_DISABLE
                 },
                 onCycleAutoLock = onCycleAutoLock
+            )
+
+            AutoClearClipboardCard(
+                clipboardClearSeconds = clipboardClearSeconds,
+                onSelectDuration = onSelectClipboardClearSeconds
             )
 
             NavRow(
@@ -389,6 +396,79 @@ private fun LockModeButton(
                 else -> colors.textPrimary
             }
         )
+    }
+}
+
+@Composable
+private fun AutoClearClipboardCard(
+    clipboardClearSeconds: Int,
+    onSelectDuration: (Int) -> Unit
+) {
+    val colors = RewifiTheme.colors
+    val durations = listOf(0 to "OFF", 15 to "15s", 30 to "30s", 60 to "1m", 120 to "2m")
+
+    BrutalCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "AUTO-CLEAR COPIED PASSWORD",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = colors.textPrimary,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        if (clipboardClearSeconds == 0) "Clipboard clearing disabled"
+                        else "Clears copied password after " + when (clipboardClearSeconds) {
+                            15 -> "15 seconds"
+                            30 -> "30 seconds"
+                            60 -> "1 minute"
+                            120 -> "2 minutes"
+                            else -> "$clipboardClearSeconds seconds"
+                        },
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                durations.forEach { (sec, label) ->
+                    val selected = clipboardClearSeconds == sec
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) Yellow else colors.surface)
+                            .border(
+                                2.dp,
+                                if (selected) colors.border else colors.border.copy(alpha = 0.4f),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { onSelectDuration(sec) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = if (selected) Ink else colors.textPrimary
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

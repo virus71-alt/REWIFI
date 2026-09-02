@@ -70,6 +70,10 @@ class SettingsStore(context: Context) {
     private val _autoLockMinutes = MutableStateFlow(prefs.getInt(KEY_AUTO_LOCK_MIN, 1))
     val autoLockMinutes: StateFlow<Int> = _autoLockMinutes.asStateFlow()
 
+    /** Seconds before copied WiFi password is automatically cleared from clipboard. 0 = Off. Default: 30s. */
+    private val _clipboardClearSeconds = MutableStateFlow(prefs.getInt(KEY_CLIPBOARD_CLEAR_SECONDS, 30))
+    val clipboardClearSeconds: StateFlow<Int> = _clipboardClearSeconds.asStateFlow()
+
     private val _autoBackup = MutableStateFlow(prefs.getBoolean(KEY_AUTO_BACKUP, false))
     val autoBackupEnabled: StateFlow<Boolean> = _autoBackup.asStateFlow()
 
@@ -198,6 +202,11 @@ class SettingsStore(context: Context) {
     fun setAppTheme(theme: String) {
         prefs.edit { putString(KEY_APP_THEME, theme) }
         _appTheme.value = theme
+    }
+
+    fun setClipboardClearSeconds(seconds: Int) {
+        prefs.edit { putInt(KEY_CLIPBOARD_CLEAR_SECONDS, seconds) }
+        _clipboardClearSeconds.value = seconds
     }
 
     fun setVaultSort(sort: VaultSort) {
@@ -366,6 +375,7 @@ class SettingsStore(context: Context) {
         private const val KEY_PIN_FAIL_COUNT = "pin_fail_count"
         private const val KEY_PIN_LOCKOUT_UNTIL = "pin_lockout_until"
         private const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"
+        private const val KEY_CLIPBOARD_CLEAR_SECONDS = "clipboard_clear_seconds"
         private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
         private const val KEY_INTRO_DONE = "intro_done"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"

@@ -2,6 +2,7 @@ package com.rewifi.app.data
 
 import android.content.Context
 import androidx.core.content.edit
+import com.rewifi.app.vault.PinSecurity
 import com.rewifi.app.vault.VaultFilter
 import com.rewifi.app.vault.VaultSort
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,6 +10,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+
+enum class AppLockType {
+    OFF,
+    PIN,
+    BIOMETRIC,
+    PIN_AND_BIOMETRIC
+}
 
 /**
  * Tiny SharedPreferences-backed settings, surfaced as [StateFlow]s so Compose
@@ -20,8 +28,17 @@ class SettingsStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("rewifi_settings", Context.MODE_PRIVATE)
 
-    private val _appLock = MutableStateFlow(prefs.getBoolean(KEY_APP_LOCK, false))
+    private val _appLockType = MutableStateFlow(loadInitialLockType())
+    val appLockType: StateFlow<AppLockType> = _appLockType.asStateFlow()
+
+    private val _appLock = MutableStateFlow(_appLockType.value != AppLockType.OFF)
     val appLockEnabled: StateFlow<Boolean> = _appLock.asStateFlow()
+
+    private val _pinLength = MutableStateFlow(prefs.getInt(KEY_PIN_LENGTH, 4))
+    val pinLength: StateFlow<Int> = _pinLength.asStateFlow()
+
+    private val _hasPin = MutableStateFlow(prefs.contains(KEY_PIN_HASH))
+    val hasPin: StateFlow<Boolean> = _hasPin.asStateFlow()
 
     private val _appTheme = MutableStateFlow(prefs.getString(KEY_APP_THEME, THEME_LIGHT) ?: THEME_LIGHT)
     val appTheme: StateFlow<String> = _appTheme.asStateFlow()
@@ -76,9 +93,106 @@ class SettingsStore(context: Context) {
     private val _lastBackupAt = MutableStateFlow(prefs.getLong(KEY_LAST_BACKUP, 0L))
     val lastBackupAt: StateFlow<Long> = _lastBackupAt.asStateFlow()
 
+    private fun loadInitialLockType(): AppLockType {
+        val stored = prefs.getString(KEY_APP_LOCK_TYPE, null)
+        if (stored != null) {
+            return runCatching { AppLockType.valueOf(stored) }.getOrDefault(AppLockType.OFF)
+        }
+        return if (prefs.getBoolean(KEY_APP_LOCK, false)) AppLockType.BIOMETRIC else AppLockType.OFF
+    }
+
+    fun setAppLockType(type: AppLockType) {
+        prefs.edit {
+            putString(KEY_APP_LOCK_TYPE, type.name)
+            putBoolean(KEY_APP_LOCK, type != AppLockType.OFF)
+        }
+        _appLockType.value = type
+        _appLock.value = type != AppLockType.OFF
+    }
+
     fun setAppLock(enabled: Boolean) {
-        prefs.edit { putBoolean(KEY_APP_LOCK, enabled) }
-        _appLock.value = enabled
+        if (!enabled) {
+            setAppLockType(AppLockType.OFF)
+        } else {
+            val target = if (_hasPin.value) AppLockType.PIN_AND_BIOMETRIC else AppLockType.BIOMETRIC
+            setAppLockType(target)
+        }
+    }
+
+    /** Set or update the REWIFI PIN with salt + PBKDF2 hash. */
+    fun setPin(pin: String, length: Int) {
+        val salt = PinSecurity.generateSalt()
+        val hash = PinSecurity.hashPin(pin, salt)
+        prefs.edit {
+            putString(KEY_PIN_SALT, PinSecurity.toBase64(salt))
+            putString(KEY_PIN_HASH, PinSecurity.toBase64(hash))
+            putInt(KEY_PIN_LENGTH, length)
+            putInt(KEY_PIN_FAIL_COUNT, 0)
+            putLong(KEY_PIN_LOCKOUT_UNTIL, 0L)
+        }
+        _pinLength.value = length
+        _hasPin.value = true
+    }
+
+    /** Verify entered PIN against stored salt + hash. */
+    fun verifyPin(enteredPin: String): Boolean {
+        val saltB64 = prefs.getString(KEY_PIN_SALT, null) ?: return false
+        val hashB64 = prefs.getString(KEY_PIN_HASH, null) ?: return false
+        val salt = PinSecurity.fromBase64(saltB64)
+        val hash = PinSecurity.fromBase64(hashB64)
+        val valid = PinSecurity.verifyPin(enteredPin, salt, hash)
+        if (valid) {
+            resetFailedAttempts()
+        }
+        return valid
+    }
+
+    fun getFailedAttempts(): Int = prefs.getInt(KEY_PIN_FAIL_COUNT, 0)
+
+    /** Record a failed PIN attempt and apply progressive lockout if needed. */
+    fun recordFailedAttempt(): Long {
+        val count = prefs.getInt(KEY_PIN_FAIL_COUNT, 0) + 1
+        val now = System.currentTimeMillis()
+        val lockoutDelayMs = when {
+            count >= 8 -> 300_000L  // 5 minutes
+            count == 7 -> 120_000L  // 2 minutes
+            count == 6 -> 60_000L   // 1 minute
+            count == 5 -> 30_000L   // 30 seconds
+            else -> 0L
+        }
+        val lockoutUntil = if (lockoutDelayMs > 0L) now + lockoutDelayMs else 0L
+        prefs.edit {
+            putInt(KEY_PIN_FAIL_COUNT, count)
+            putLong(KEY_PIN_LOCKOUT_UNTIL, lockoutUntil)
+        }
+        return lockoutUntil
+    }
+
+    fun resetFailedAttempts() {
+        prefs.edit {
+            putInt(KEY_PIN_FAIL_COUNT, 0)
+            putLong(KEY_PIN_LOCKOUT_UNTIL, 0L)
+        }
+    }
+
+    fun getRemainingLockoutSeconds(): Int {
+        val until = prefs.getLong(KEY_PIN_LOCKOUT_UNTIL, 0L)
+        val remaining = ((until - System.currentTimeMillis()) / 1000L).toInt()
+        return if (remaining > 0) remaining else 0
+    }
+
+    fun clearPin() {
+        prefs.edit {
+            remove(KEY_PIN_SALT)
+            remove(KEY_PIN_HASH)
+            remove(KEY_PIN_LENGTH)
+            remove(KEY_PIN_FAIL_COUNT)
+            remove(KEY_PIN_LOCKOUT_UNTIL)
+        }
+        _hasPin.value = false
+        if (_appLockType.value == AppLockType.PIN || _appLockType.value == AppLockType.PIN_AND_BIOMETRIC) {
+            setAppLockType(AppLockType.OFF)
+        }
     }
 
     fun setAppTheme(theme: String) {
@@ -245,6 +359,12 @@ class SettingsStore(context: Context) {
         private const val KEY_CUSTOM_CATEGORIES = "custom_categories"
         private const val KEY_UPDATED_MAP = "vault_updated_map"
         private const val KEY_APP_LOCK = "app_lock_enabled"
+        private const val KEY_APP_LOCK_TYPE = "app_lock_type"
+        private const val KEY_PIN_SALT = "pin_salt_b64"
+        private const val KEY_PIN_HASH = "pin_hash_b64"
+        private const val KEY_PIN_LENGTH = "pin_length"
+        private const val KEY_PIN_FAIL_COUNT = "pin_fail_count"
+        private const val KEY_PIN_LOCKOUT_UNTIL = "pin_lockout_until"
         private const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"
         private const val KEY_AUTO_BACKUP = "auto_backup_enabled"
         private const val KEY_INTRO_DONE = "intro_done"

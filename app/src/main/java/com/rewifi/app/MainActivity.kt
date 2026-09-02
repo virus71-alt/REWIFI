@@ -33,6 +33,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.ApiException
+import com.rewifi.app.data.AppLockType
 import com.rewifi.app.data.DriveAuth
 import com.rewifi.app.data.DriveBackupWorker
 import com.rewifi.app.data.SettingsStore
@@ -44,6 +45,7 @@ import com.rewifi.app.ui.screens.DetailScreen
 import com.rewifi.app.ui.screens.EditScreen
 import com.rewifi.app.ui.screens.IntroScreen
 import com.rewifi.app.ui.screens.LockScreen
+import com.rewifi.app.ui.screens.PinLockScreen
 import com.rewifi.app.ui.screens.NfcWriteScreen
 import com.rewifi.app.ui.screens.ScannerScreen
 import com.rewifi.app.ui.screens.SettingsScreen
@@ -188,8 +190,7 @@ class MainActivity : FragmentActivity() {
 
         if (
             backgroundedAt != 0L &&
-            settings.appLockEnabled.value &&
-            BiometricLock.isAvailable(this)
+            settings.appLockType.value != AppLockType.OFF
         ) {
             val elapsed =
                 android.os.SystemClock.elapsedRealtime() - backgroundedAt
@@ -412,33 +413,64 @@ class MainActivity : FragmentActivity() {
         }
 
         /*
-         * 4. Biometric lock
+         * 4. App Lock (PIN / Biometric / PIN + Biometric)
          */
-        val lockEnabled by
-        settings.appLockEnabled.collectAsState()
+        val appLockType by settings.appLockType.collectAsState()
+        val hasPin by settings.hasPin.collectAsState()
+        val pinLength by settings.pinLength.collectAsState()
 
-        if (
-            lockEnabled &&
-            BiometricLock.isAvailable(this) &&
-            !unlocked.value
-        ) {
-
-            LockScreen(
-                onUnlock = {
-
-                    BiometricLock.prompt(
-                        this,
+        if (appLockType != AppLockType.OFF && !unlocked.value) {
+            when (appLockType) {
+                AppLockType.BIOMETRIC -> {
+                    if (BiometricLock.isAvailable(this)) {
+                        LockScreen(
+                            onUnlock = {
+                                BiometricLock.prompt(
+                                    this,
+                                    onSuccess = {
+                                        unlocked.value = true
+                                    },
+                                    onFail = {
+                                        // User cancelled or authentication failed.
+                                    }
+                                )
+                            }
+                        )
+                        return
+                    }
+                }
+                AppLockType.PIN, AppLockType.PIN_AND_BIOMETRIC -> {
+                    PinLockScreen(
+                        pinLength = pinLength,
+                        allowBiometric = appLockType == AppLockType.PIN_AND_BIOMETRIC && BiometricLock.isAvailable(this),
+                        onVerifyPin = { enteredPin ->
+                            settings.verifyPin(enteredPin)
+                        },
+                        onRecordFailedAttempt = {
+                            settings.recordFailedAttempt()
+                        },
+                        getRemainingLockoutSeconds = {
+                            settings.getRemainingLockoutSeconds()
+                        },
+                        onBiometricClick = {
+                            if (BiometricLock.isAvailable(this)) {
+                                BiometricLock.prompt(
+                                    this,
+                                    onSuccess = {
+                                        unlocked.value = true
+                                    },
+                                    onFail = {}
+                                )
+                            }
+                        },
                         onSuccess = {
                             unlocked.value = true
-                        },
-                        onFail = {
-                            // User cancelled or authentication failed.
                         }
                     )
+                    return
                 }
-            )
-
-            return
+                AppLockType.OFF -> {}
+            }
         }
 
         /*
@@ -632,9 +664,6 @@ class MainActivity : FragmentActivity() {
                     val appTheme by
                     settings.appTheme.collectAsState()
 
-                    val lock by
-                    settings.appLockEnabled.collectAsState()
-
                     val autoLock by
                     settings.autoLockMinutes.collectAsState()
 
@@ -645,36 +674,20 @@ class MainActivity : FragmentActivity() {
                     vm.customCategories.collectAsState()
 
                     SettingsScreen(
-
                         appTheme = appTheme,
-
-                        appLock = lock,
-
-                        autoLockMinutes =
-                            autoLock,
-
-                        backupConfigured =
-                            driveEmail != null,
-
-                        biometricAvailable =
-                            BiometricLock.isAvailable(
-                                this@MainActivity
-                            ),
-
-                        customCategories =
-                            customCategories,
-
-                        onBack = {
-                            pop()
-                        },
-
-                        onSelectTheme = {
-                            settings.setAppTheme(it)
-                        },
-
-                        onToggleAppLock = {
-                            settings.setAppLock(it)
-                        },
+                        appLockType = appLockType,
+                        hasPin = hasPin,
+                        pinLength = pinLength,
+                        autoLockMinutes = autoLock,
+                        backupConfigured = driveEmail != null,
+                        biometricAvailable = BiometricLock.isAvailable(this@MainActivity),
+                        customCategories = customCategories,
+                        onBack = { pop() },
+                        onSelectTheme = { settings.setAppTheme(it) },
+                        onSetAppLockType = { settings.setAppLockType(it) },
+                        onSetPin = { pin, len -> settings.setPin(pin, len) },
+                        onVerifyPin = { settings.verifyPin(it) },
+                        onClearPin = { settings.clearPin() },
 
                         onCycleAutoLock = {
 

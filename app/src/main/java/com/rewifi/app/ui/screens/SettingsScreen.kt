@@ -41,10 +41,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.rewifi.app.data.AppLockType
 import com.rewifi.app.data.SettingsStore
 import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
 import com.rewifi.app.ui.components.BrutalField
+import com.rewifi.app.ui.components.PinSetupDialog
+import com.rewifi.app.ui.components.PinSetupMode
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
 import com.rewifi.app.ui.theme.Red
@@ -55,14 +58,19 @@ import com.rewifi.app.ui.theme.Yellow
 @Composable
 fun SettingsScreen(
     appTheme: String,
-    appLock: Boolean,
+    appLockType: AppLockType,
+    hasPin: Boolean,
+    pinLength: Int,
     autoLockMinutes: Int,
     backupConfigured: Boolean,
     biometricAvailable: Boolean,
     customCategories: List<String>,
     onBack: () -> Unit,
     onSelectTheme: (String) -> Unit,
-    onToggleAppLock: (Boolean) -> Unit,
+    onSetAppLockType: (AppLockType) -> Unit,
+    onSetPin: (String, Int) -> Unit,
+    onVerifyPin: (String) -> Boolean,
+    onClearPin: () -> Unit,
     onCycleAutoLock: () -> Unit,
     onOpenBackupSetup: () -> Unit,
     onCreateCategory: (String) -> Boolean,
@@ -70,6 +78,8 @@ fun SettingsScreen(
     onDeleteCategory: (String) -> Unit
 ) {
     val colors = RewifiTheme.colors
+    var pinDialogMode by remember { mutableStateOf<PinSetupMode?>(null) }
+    var pendingLockType by remember { mutableStateOf<AppLockType?>(null) }
 
     Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         Column(
@@ -96,28 +106,49 @@ fun SettingsScreen(
                 onDeleteCategory = onDeleteCategory
             )
 
-            SettingRow(
-                title = "APP LOCK",
-                subtitle = if (biometricAvailable)
-                    "Require fingerprint / PIN to open the vault"
-                else
-                    "Set a screen lock on this device to use this",
-                checked = appLock && biometricAvailable,
-                enabled = biometricAvailable,
-                onChange = onToggleAppLock
+            AppLockManagementCard(
+                appLockType = appLockType,
+                hasPin = hasPin,
+                pinLength = pinLength,
+                autoLockMinutes = autoLockMinutes,
+                biometricAvailable = biometricAvailable,
+                onSelectLockType = { targetType ->
+                    when (targetType) {
+                        AppLockType.OFF -> {
+                            if (hasPin && (appLockType == AppLockType.PIN || appLockType == AppLockType.PIN_AND_BIOMETRIC)) {
+                                pendingLockType = AppLockType.OFF
+                                pinDialogMode = PinSetupMode.VERIFY_TO_DISABLE
+                            } else {
+                                onSetAppLockType(AppLockType.OFF)
+                            }
+                        }
+                        AppLockType.PIN, AppLockType.PIN_AND_BIOMETRIC -> {
+                            if (!hasPin) {
+                                pendingLockType = targetType
+                                pinDialogMode = PinSetupMode.CREATE
+                            } else {
+                                onSetAppLockType(targetType)
+                            }
+                        }
+                        AppLockType.BIOMETRIC -> {
+                            if (hasPin && (appLockType == AppLockType.PIN || appLockType == AppLockType.PIN_AND_BIOMETRIC)) {
+                                pendingLockType = AppLockType.BIOMETRIC
+                                pinDialogMode = PinSetupMode.VERIFY_TO_DISABLE
+                            } else {
+                                onSetAppLockType(AppLockType.BIOMETRIC)
+                            }
+                        }
+                    }
+                },
+                onRequestChangePin = {
+                    pinDialogMode = PinSetupMode.CHANGE
+                },
+                onRequestDisablePin = { targetType ->
+                    pendingLockType = targetType
+                    pinDialogMode = PinSetupMode.VERIFY_TO_DISABLE
+                },
+                onCycleAutoLock = onCycleAutoLock
             )
-
-            if (appLock && biometricAvailable) {
-                NavRow(
-                    title = "AUTO-LOCK",
-                    subtitle = "Re-lock after " + when (autoLockMinutes) {
-                        0 -> "leaving the app"
-                        1 -> "1 minute"
-                        else -> "$autoLockMinutes minutes"
-                    } + " · tap to change",
-                    onClick = onCycleAutoLock
-                )
-            }
 
             NavRow(
                 title = "BACKUP & SYNC",
@@ -128,6 +159,236 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(20.dp))
         }
+
+        if (pinDialogMode != null) {
+            PinSetupDialog(
+                mode = pinDialogMode!!,
+                currentPinLength = pinLength,
+                onVerifyCurrentPin = onVerifyPin,
+                onPinConfirmed = { pin, length ->
+                    onSetPin(pin, length)
+                    onSetAppLockType(pendingLockType ?: AppLockType.PIN)
+                    pinDialogMode = null
+                    pendingLockType = null
+                },
+                onVerifiedToDisable = {
+                    onClearPin()
+                    onSetAppLockType(pendingLockType ?: AppLockType.OFF)
+                    pinDialogMode = null
+                    pendingLockType = null
+                },
+                onDismiss = {
+                    pinDialogMode = null
+                    pendingLockType = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppLockManagementCard(
+    appLockType: AppLockType,
+    hasPin: Boolean,
+    pinLength: Int,
+    autoLockMinutes: Int,
+    biometricAvailable: Boolean,
+    onSelectLockType: (AppLockType) -> Unit,
+    onRequestChangePin: () -> Unit,
+    onRequestDisablePin: (targetType: AppLockType) -> Unit,
+    onCycleAutoLock: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+
+    BrutalCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // Header
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "APP LOCK",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        color = colors.textPrimary,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        "Protect vault with PIN or Biometrics",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // Status badge
+                val statusText = when (appLockType) {
+                    AppLockType.OFF -> "OFF"
+                    AppLockType.PIN -> "PIN ($pinLength-D)"
+                    AppLockType.BIOMETRIC -> "BIOMETRIC"
+                    AppLockType.PIN_AND_BIOMETRIC -> "PIN + BIO"
+                }
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (appLockType == AppLockType.OFF) colors.surfaceVariant else Yellow)
+                        .border(1.5.dp, colors.border, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        statusText,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 10.sp,
+                        color = if (appLockType == AppLockType.OFF) colors.textSecondary else Ink
+                    )
+                }
+            }
+
+            // 4 Options Grid (2x2)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LockModeButton(
+                        title = "OFF",
+                        selected = appLockType == AppLockType.OFF,
+                        enabled = true,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        onSelectLockType(AppLockType.OFF)
+                    }
+
+                    LockModeButton(
+                        title = "REWIFI PIN",
+                        selected = appLockType == AppLockType.PIN,
+                        enabled = true,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        onSelectLockType(AppLockType.PIN)
+                    }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LockModeButton(
+                        title = "BIOMETRIC",
+                        selected = appLockType == AppLockType.BIOMETRIC,
+                        enabled = biometricAvailable,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        onSelectLockType(AppLockType.BIOMETRIC)
+                    }
+
+                    LockModeButton(
+                        title = "PIN + BIO",
+                        selected = appLockType == AppLockType.PIN_AND_BIOMETRIC,
+                        enabled = biometricAvailable,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        onSelectLockType(AppLockType.PIN_AND_BIOMETRIC)
+                    }
+                }
+            }
+
+            // Change PIN Action if PIN is active
+            if (hasPin && (appLockType == AppLockType.PIN || appLockType == AppLockType.PIN_AND_BIOMETRIC)) {
+                BrutalButton(
+                    text = "CHANGE REWIFI PIN",
+                    modifier = Modifier.fillMaxWidth(),
+                    bg = colors.surfaceVariant,
+                    fg = colors.textPrimary,
+                    onClick = onRequestChangePin
+                )
+            }
+
+            // Auto-lock row if any lock is enabled
+            if (appLockType != AppLockType.OFF) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.surfaceVariant)
+                        .border(2.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .clickable(onClick = onCycleAutoLock)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                "AUTO-LOCK TIMEOUT",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = colors.textSecondary,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                when (autoLockMinutes) {
+                                    0 -> "Re-lock immediately upon leaving"
+                                    1 -> "Re-lock after 1 minute"
+                                    else -> "Re-lock after $autoLockMinutes minutes"
+                                },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = colors.textPrimary
+                            )
+                        }
+                        Text("CHANGE", fontWeight = FontWeight.Black, fontSize = 11.sp, color = Yellow)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LockModeButton(
+    title: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    Box(
+        modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                when {
+                    !enabled -> colors.surfaceVariant.copy(alpha = 0.4f)
+                    selected -> Yellow
+                    else -> colors.surface
+                }
+            )
+            .border(
+                2.dp,
+                if (selected) colors.border else colors.border.copy(alpha = 0.4f),
+                RoundedCornerShape(10.dp)
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            title,
+            fontWeight = FontWeight.Black,
+            fontSize = 12.sp,
+            color = when {
+                !enabled -> colors.textSecondary.copy(alpha = 0.4f)
+                selected -> Ink
+                else -> colors.textPrimary
+            }
+        )
     }
 }
 

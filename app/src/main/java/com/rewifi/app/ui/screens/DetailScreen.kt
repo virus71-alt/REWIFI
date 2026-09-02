@@ -110,23 +110,25 @@ fun DetailScreen(
             ) { Icon(Icons.Default.Delete, "Delete", tint = Snow) }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 30.sp, color = colors.textPrimary, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(
                 Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(colors.surfaceVariant)
-                    .border(2.dp, colors.border, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .border(2.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
                     cred.category.uppercase(),
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Black,
                     fontSize = 11.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 1.sp,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
+            Text(cred.ssid, fontWeight = FontWeight.Black, fontSize = 32.sp, color = colors.textPrimary, maxLines = 2)
         }
 
         // QR — scan with phone camera to join instantly (the "restore" path)

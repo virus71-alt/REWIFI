@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +46,7 @@ import com.rewifi.app.ui.theme.Red
 import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.ui.theme.Yellow
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun EditScreen(
     existing: WifiCred?,
@@ -88,11 +90,12 @@ fun EditScreen(
                     letterSpacing = 1.sp
                 )
                 Spacer(Modifier.height(8.dp))
-                LazyRow(
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(categories) { cat ->
+                    categories.forEach { cat ->
                         val isSelected = selectedCategory.equals(cat, ignoreCase = true)
                         Box(
                             Modifier
@@ -100,38 +103,42 @@ fun EditScreen(
                                 .background(if (isSelected) Yellow else colors.surfaceVariant)
                                 .border(2.dp, if (isSelected) colors.border else colors.border.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                                 .clickable { selectedCategory = cat }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 14.dp, vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 cat.uppercase(),
                                 fontWeight = FontWeight.Black,
-                                fontSize = 12.sp,
-                                color = if (isSelected) Ink else colors.textPrimary
+                                fontSize = 13.sp,
+                                letterSpacing = 0.5.sp,
+                                color = if (isSelected) Ink else colors.textPrimary,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
-                    item {
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(colors.surface)
-                                .border(2.dp, colors.border, RoundedCornerShape(8.dp))
-                                .clickable {
-                                    newCategoryText = ""
-                                    newCategoryError = null
-                                    showNewCategoryDialog = true
-                                }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "+ NEW",
-                                fontWeight = FontWeight.Black,
-                                fontSize = 12.sp,
-                                color = colors.textPrimary
-                            )
-                        }
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surface)
+                            .border(2.dp, colors.border, RoundedCornerShape(8.dp))
+                            .clickable {
+                                newCategoryText = ""
+                                newCategoryError = null
+                                showNewCategoryDialog = true
+                            }
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "+ NEW",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.sp,
+                            letterSpacing = 0.5.sp,
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }

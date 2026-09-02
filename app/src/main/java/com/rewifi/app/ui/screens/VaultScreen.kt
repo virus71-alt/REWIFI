@@ -11,9 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -196,6 +198,7 @@ fun VaultScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun SearchBarAndFilterControls(
     searchQuery: String,
@@ -296,26 +299,50 @@ private fun SearchBarAndFilterControls(
             }
         }
 
-        // Quick Category Chip Bar
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            item {
-                FilterChip(
-                    label = "ALL",
-                    selected = categoryFilter.equals("ALL", ignoreCase = true)
-                ) {
-                    onCategoryFilterChange("ALL")
+        // Active filter pills (shown when panel is closed but filters are active)
+        if (!showPanel && (isFilterActive || searchQuery.isNotEmpty())) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (isCategoryActive) {
+                    ActiveBadge(
+                        label = categoryFilter.uppercase(),
+                        onClear = { onCategoryFilterChange("ALL") }
+                    )
                 }
-            }
-            items(allCategories) { cat ->
-                FilterChip(
-                    label = cat.uppercase(),
-                    selected = categoryFilter.equals(cat, ignoreCase = true)
-                ) {
-                    onCategoryFilterChange(cat)
+                if (filter != VaultFilter.ALL) {
+                    ActiveBadge(
+                        label = filter.name,
+                        onClear = { onFilterChange(VaultFilter.ALL) }
+                    )
                 }
+                if (sort != VaultSort.NAME_AZ) {
+                    val sortLabel = when (sort) {
+                        VaultSort.RECENTLY_ADDED -> "RECENT"
+                        VaultSort.RECENTLY_UPDATED -> "UPDATED"
+                        VaultSort.NAME_ZA -> "Z → A"
+                        else -> ""
+                    }
+                    ActiveBadge(
+                        label = sortLabel,
+                        onClear = { onSortChange(VaultSort.NAME_AZ) }
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "RESET",
+                    color = Red,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    modifier = Modifier
+                        .clickable {
+                            onClearFilters()
+                            onSortChange(VaultSort.NAME_AZ)
+                        }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
             }
         }
 
@@ -326,7 +353,7 @@ private fun SearchBarAndFilterControls(
             exit = shrinkVertically() + fadeOut()
         ) {
             BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     // Category row in panel
                     Column {
                         Text(
@@ -336,17 +363,16 @@ private fun SearchBarAndFilterControls(
                             color = colors.textSecondary,
                             letterSpacing = 1.sp
                         )
-                        Spacer(Modifier.height(6.dp))
-                        LazyRow(
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            item {
-                                FilterChip("ALL", categoryFilter.equals("ALL", ignoreCase = true)) {
-                                    onCategoryFilterChange("ALL")
-                                }
+                            FilterChip("ALL", categoryFilter.equals("ALL", ignoreCase = true)) {
+                                onCategoryFilterChange("ALL")
                             }
-                            items(allCategories) { cat ->
+                            allCategories.forEach { cat ->
                                 FilterChip(cat.uppercase(), categoryFilter.equals(cat, ignoreCase = true)) {
                                     onCategoryFilterChange(cat)
                                 }
@@ -363,7 +389,7 @@ private fun SearchBarAndFilterControls(
                             color = colors.textSecondary,
                             letterSpacing = 1.sp
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -389,21 +415,21 @@ private fun SearchBarAndFilterControls(
                             color = colors.textSecondary,
                             letterSpacing = 1.sp
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
                         Row(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            FilterChip("RECENT", sort == VaultSort.RECENTLY_ADDED, Modifier.weight(1f)) {
+                            FilterChip("RECENT", sort == VaultSort.RECENTLY_ADDED, Modifier.weight(1f), horizontalPadding = 4.dp) {
                                 onSortChange(VaultSort.RECENTLY_ADDED)
                             }
-                            FilterChip("UPDATED", sort == VaultSort.RECENTLY_UPDATED, Modifier.weight(1f)) {
+                            FilterChip("UPDATED", sort == VaultSort.RECENTLY_UPDATED, Modifier.weight(1f), horizontalPadding = 4.dp) {
                                 onSortChange(VaultSort.RECENTLY_UPDATED)
                             }
-                            FilterChip("A → Z", sort == VaultSort.NAME_AZ, Modifier.weight(1f)) {
+                            FilterChip("A → Z", sort == VaultSort.NAME_AZ, Modifier.weight(1f), horizontalPadding = 4.dp) {
                                 onSortChange(VaultSort.NAME_AZ)
                             }
-                            FilterChip("Z → A", sort == VaultSort.NAME_ZA, Modifier.weight(1f)) {
+                            FilterChip("Z → A", sort == VaultSort.NAME_ZA, Modifier.weight(1f), horizontalPadding = 4.dp) {
                                 onSortChange(VaultSort.NAME_ZA)
                             }
                         }
@@ -423,7 +449,6 @@ private fun SearchBarAndFilterControls(
                                     .clickable {
                                         onClearFilters()
                                         onSortChange(VaultSort.NAME_AZ)
-                                        onCategoryFilterChange("ALL")
                                     }
                                     .padding(4.dp)
                             )
@@ -440,6 +465,7 @@ private fun FilterChip(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 12.dp,
     onClick: () -> Unit
 ) {
     val colors = RewifiTheme.colors
@@ -449,19 +475,48 @@ private fun FilterChip(
 
     Box(
         modifier
+            .defaultMinSize(minHeight = 42.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(bg)
             .border(2.dp, border, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(horizontal = horizontalPadding, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            label,
+            text = label,
             color = fg,
             fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
-            fontSize = 11.sp
+            fontSize = 12.sp,
+            letterSpacing = 0.3.sp,
+            maxLines = 1,
+            softWrap = false
         )
+    }
+}
+
+@Composable
+private fun ActiveBadge(label: String, onClear: () -> Unit) {
+    val colors = RewifiTheme.colors
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Yellow)
+            .border(2.dp, colors.border, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClear)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = label,
+            color = Ink,
+            fontWeight = FontWeight.Black,
+            fontSize = 10.sp,
+            maxLines = 1,
+            softWrap = false
+        )
+        Icon(Icons.Default.Close, contentDescription = "Clear", tint = Ink, modifier = Modifier.size(12.dp))
     }
 }
 
@@ -671,7 +726,9 @@ private fun WifiRow(
                             color = colors.textPrimary,
                             fontWeight = FontWeight.Black,
                             fontSize = 9.sp,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -698,8 +755,6 @@ private fun WifiRow(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(Modifier.width(10.dp))
-            Text("OPEN ›", fontWeight = FontWeight.Black, fontSize = 12.sp, color = colors.textPrimary)
         }
     }
 }

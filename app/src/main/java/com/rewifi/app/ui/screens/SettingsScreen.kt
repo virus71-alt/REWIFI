@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -255,6 +256,7 @@ private fun BrutalSwitch(checked: Boolean, enabled: Boolean, onChange: (Boolean)
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun CategoryManagementCard(
     customCategories: List<String>,
@@ -282,37 +284,30 @@ private fun CategoryManagementCard(
             }
 
             // Built-in categories
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("BUILT-IN (DEFAULT)", fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.textSecondary, letterSpacing = 1.sp)
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    val firstHalf = SettingsStore.BUILTIN_CATEGORIES.take(3)
-                    firstHalf.forEach { cat ->
+                    SettingsStore.BUILTIN_CATEGORIES.forEach { cat ->
                         Box(
-                            Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.surfaceVariant)
+                            Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.surfaceVariant)
                                 .border(2.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-                                .padding(vertical = 8.dp),
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(cat.uppercase(), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textPrimary)
-                        }
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val secondHalf = SettingsStore.BUILTIN_CATEGORIES.drop(3)
-                    secondHalf.forEach { cat ->
-                        Box(
-                            Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.surfaceVariant)
-                                .border(2.dp, colors.border.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-                                .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(cat.uppercase(), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textPrimary)
+                            Text(
+                                cat.uppercase(),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = colors.textPrimary,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -339,6 +334,8 @@ private fun CategoryManagementCard(
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 13.sp,
                                 color = colors.textPrimary,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.weight(1f)
                             )
                             // Edit

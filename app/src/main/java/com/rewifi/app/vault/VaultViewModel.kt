@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,8 +39,45 @@ class VaultViewModel(
     val creds: StateFlow<List<WifiCred>> =
         repo.creds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val vaultFilter: StateFlow<VaultFilter> = settings.vaultFilter
+    val vaultSort: StateFlow<VaultSort> = settings.vaultSort
+
+    val filteredCreds: StateFlow<List<WifiCred>> =
+        combine(
+            creds,
+            _searchQuery,
+            settings.vaultFilter,
+            settings.vaultSort,
+            settings.updatedAtMap
+        ) { list, query, filter, sort, updatedMap ->
+            VaultFilterSort.filterAndSort(list, query, filter, sort, updatedMap)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun setFilter(filter: VaultFilter) {
+        settings.setVaultFilter(filter)
+    }
+
+    fun setSort(sort: VaultSort) {
+        settings.setVaultSort(sort)
+    }
+
+    fun clearFilters() {
+        _searchQuery.value = ""
+        settings.setVaultFilter(VaultFilter.ALL)
+    }
+
     fun save(id: Long, ssid: String, password: String, note: String?) = viewModelScope.launch {
         repo.upsert(id, ssid, password, note)
+        if (id != 0L) {
+            settings.recordUpdated(id, System.currentTimeMillis())
+        }
         autoBackupIfEnabled()
         driveSyncIfEnabled()
     }

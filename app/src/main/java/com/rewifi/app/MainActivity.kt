@@ -516,63 +516,34 @@ class MainActivity : FragmentActivity() {
             when (screen) {
 
                 is Screen.Vault -> {
-
-                    val syncState by
-                    vm.syncState.collectAsState()
-
-                    val flash by
-                    vm.flash.collectAsState()
+                    val syncState by vm.syncState.collectAsState()
+                    val flash by vm.flash.collectAsState()
+                    val filteredCreds by vm.filteredCreds.collectAsState()
+                    val searchQuery by vm.searchQuery.collectAsState()
+                    val filter by vm.vaultFilter.collectAsState()
+                    val sort by vm.vaultSort.collectAsState()
 
                     VaultScreen(
-                        creds = creds,
+                        creds = filteredCreds,
+                        totalCount = creds.size,
+                        searchQuery = searchQuery,
+                        filter = filter,
+                        sort = sort,
                         syncState = syncState,
                         flash = flash,
-
-                        onAdd = {
-                            navTo(
-                                Screen.Edit(null)
-                            )
-                        },
-
-                        onOpen = {
-                            navTo(
-                                Screen.Detail(it)
-                            )
-                        },
-
-                        onBackup = {
-                            navTo(
-                                Screen.Backup
-                            )
-                        },
-
-                        onScan = {
-                            navTo(
-                                Screen.Scan
-                            )
-                        },
-
-                        onSettings = {
-                            navTo(
-                                Screen.Settings
-                            )
-                        },
-
+                        onSearchQueryChange = { vm.setSearchQuery(it) },
+                        onFilterChange = { vm.setFilter(it) },
+                        onSortChange = { vm.setSort(it) },
+                        onClearFilters = { vm.clearFilters() },
+                        onAdd = { navTo(Screen.Edit(null)) },
+                        onOpen = { navTo(Screen.Detail(it)) },
+                        onBackup = { navTo(Screen.Backup) },
+                        onScan = { navTo(Screen.Scan) },
+                        onSettings = { navTo(Screen.Settings) },
                         onSync = {
-
-                            if (
-                                settings.driveEmail.value ==
-                                null
-                            ) {
-
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "Connect Google Drive first",
-                                    Toast.LENGTH_LONG
-                                ).show()
-
+                            if (settings.driveEmail.value == null) {
+                                Toast.makeText(this@MainActivity, "Connect Google Drive first", Toast.LENGTH_SHORT).show()
                             } else {
-
                                 vm.triggerSync()
                             }
                         }

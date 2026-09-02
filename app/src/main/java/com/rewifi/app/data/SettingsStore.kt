@@ -2,9 +2,12 @@ package com.rewifi.app.data
 
 import android.content.Context
 import androidx.core.content.edit
+import com.rewifi.app.vault.VaultFilter
+import com.rewifi.app.vault.VaultSort
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
 
 /**
  * Tiny SharedPreferences-backed settings, surfaced as [StateFlow]s so Compose
@@ -21,6 +24,23 @@ class SettingsStore(context: Context) {
 
     private val _appTheme = MutableStateFlow(prefs.getString(KEY_APP_THEME, THEME_LIGHT) ?: THEME_LIGHT)
     val appTheme: StateFlow<String> = _appTheme.asStateFlow()
+
+    private val _vaultSort = MutableStateFlow(
+        runCatching {
+            VaultSort.valueOf(prefs.getString(KEY_VAULT_SORT, VaultSort.NAME_AZ.name) ?: VaultSort.NAME_AZ.name)
+        }.getOrDefault(VaultSort.NAME_AZ)
+    )
+    val vaultSort: StateFlow<VaultSort> = _vaultSort.asStateFlow()
+
+    private val _vaultFilter = MutableStateFlow(
+        runCatching {
+            VaultFilter.valueOf(prefs.getString(KEY_VAULT_FILTER, VaultFilter.ALL.name) ?: VaultFilter.ALL.name)
+        }.getOrDefault(VaultFilter.ALL)
+    )
+    val vaultFilter: StateFlow<VaultFilter> = _vaultFilter.asStateFlow()
+
+    private val _updatedAtMap = MutableStateFlow(loadUpdatedMap())
+    val updatedAtMap: StateFlow<Map<Long, Long>> = _updatedAtMap.asStateFlow()
 
     /** Minutes the app can be backgrounded before it re-locks. 0 = immediately. */
     private val _autoLockMinutes = MutableStateFlow(prefs.getInt(KEY_AUTO_LOCK_MIN, 1))
@@ -57,6 +77,39 @@ class SettingsStore(context: Context) {
     fun setAppTheme(theme: String) {
         prefs.edit { putString(KEY_APP_THEME, theme) }
         _appTheme.value = theme
+    }
+
+    fun setVaultSort(sort: VaultSort) {
+        prefs.edit { putString(KEY_VAULT_SORT, sort.name) }
+        _vaultSort.value = sort
+    }
+
+    fun setVaultFilter(filter: VaultFilter) {
+        prefs.edit { putString(KEY_VAULT_FILTER, filter.name) }
+        _vaultFilter.value = filter
+    }
+
+    private fun loadUpdatedMap(): Map<Long, Long> {
+        val raw = prefs.getString(KEY_UPDATED_MAP, null) ?: return emptyMap()
+        return runCatching {
+            val json = JSONObject(raw)
+            val map = mutableMapOf<Long, Long>()
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                map[key.toLong()] = json.getLong(key)
+            }
+            map
+        }.getOrDefault(emptyMap())
+    }
+
+    fun recordUpdated(id: Long, timestamp: Long) {
+        val current = _updatedAtMap.value.toMutableMap()
+        current[id] = timestamp
+        val json = JSONObject()
+        current.forEach { (k, v) -> json.put(k.toString(), v) }
+        prefs.edit { putString(KEY_UPDATED_MAP, json.toString()) }
+        _updatedAtMap.value = current
     }
 
     fun setAutoLockMinutes(minutes: Int) {
@@ -111,6 +164,9 @@ class SettingsStore(context: Context) {
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
         private const val KEY_APP_THEME = "app_theme"
+        private const val KEY_VAULT_SORT = "vault_sort"
+        private const val KEY_VAULT_FILTER = "vault_filter"
+        private const val KEY_UPDATED_MAP = "vault_updated_map"
         private const val KEY_APP_LOCK = "app_lock_enabled"
         private const val KEY_AUTO_LOCK_MIN = "auto_lock_minutes"
         private const val KEY_AUTO_BACKUP = "auto_backup_enabled"

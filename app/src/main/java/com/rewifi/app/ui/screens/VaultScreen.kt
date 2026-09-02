@@ -1,5 +1,10 @@
 package com.rewifi.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,14 +26,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,14 +52,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rewifi.app.data.WifiCred
+import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
 import com.rewifi.app.vault.Flash
 import com.rewifi.app.vault.SyncState
+import com.rewifi.app.vault.VaultFilter
+import com.rewifi.app.vault.VaultSort
 import com.rewifi.app.ui.theme.Blue
 import com.rewifi.app.ui.theme.Green
 import com.rewifi.app.ui.theme.Ink
@@ -64,8 +79,16 @@ private val accents = listOf(Blue, Green, Red, Yellow)
 @Composable
 fun VaultScreen(
     creds: List<WifiCred>,
+    totalCount: Int,
+    searchQuery: String,
+    filter: VaultFilter,
+    sort: VaultSort,
     syncState: SyncState,
     flash: Flash?,
+    onSearchQueryChange: (String) -> Unit,
+    onFilterChange: (VaultFilter) -> Unit,
+    onSortChange: (VaultSort) -> Unit,
+    onClearFilters: () -> Unit,
     onAdd: () -> Unit,
     onOpen: (WifiCred) -> Unit,
     onBackup: () -> Unit,
@@ -75,6 +98,7 @@ fun VaultScreen(
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
     val colors = RewifiTheme.colors
+    val isFiltered = searchQuery.isNotBlank() || filter != VaultFilter.ALL
 
     Box(Modifier.fillMaxSize().background(colors.background).systemBarsPadding()) {
         LazyColumn(
@@ -82,9 +106,38 @@ fun VaultScreen(
             contentPadding = PaddingValues(20.dp, 24.dp, 20.dp, 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item { Header(creds.size, onBackup, onSettings, onSync) }
-            if (creds.isEmpty()) {
+            item {
+                Header(
+                    totalCount = totalCount,
+                    filteredCount = creds.size,
+                    isFiltered = isFiltered,
+                    onBackup = onBackup,
+                    onSettings = onSettings,
+                    onSync = onSync
+                )
+            }
+
+            // Always show search + filter bar if vault has entries or user is currently searching/filtering
+            if (totalCount > 0 || isFiltered) {
+                item {
+                    SearchBarAndFilterControls(
+                        searchQuery = searchQuery,
+                        filter = filter,
+                        sort = sort,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onFilterChange = onFilterChange,
+                        onSortChange = onSortChange,
+                        onClearFilters = onClearFilters
+                    )
+                }
+            }
+
+            if (totalCount == 0 && !isFiltered) {
                 item { EmptyState() }
+            } else if (creds.isEmpty()) {
+                item {
+                    FilteredEmptyState(query = searchQuery, onClear = onClearFilters)
+                }
             } else {
                 items(creds, key = { it.id }) { c ->
                     WifiRow(c, accents[(c.id % accents.size).toInt()]) { onOpen(c) }
@@ -129,6 +182,257 @@ fun VaultScreen(
     }
 }
 
+@Composable
+private fun SearchBarAndFilterControls(
+    searchQuery: String,
+    filter: VaultFilter,
+    sort: VaultSort,
+    onSearchQueryChange: (String) -> Unit,
+    onFilterChange: (VaultFilter) -> Unit,
+    onSortChange: (VaultSort) -> Unit,
+    onClearFilters: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    var showPanel by remember { mutableStateOf(false) }
+    val isFilterActive = filter != VaultFilter.ALL || sort != VaultSort.NAME_AZ
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Search bar row
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                Modifier.weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.surface)
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                "Search SSID, note...",
+                                color = colors.textSecondary,
+                                fontSize = 14.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = onSearchQueryChange,
+                            singleLine = true,
+                            cursorBrush = SolidColor(colors.textPrimary),
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontSize = 14.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (searchQuery.isNotEmpty()) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Clear search",
+                            tint = colors.textPrimary,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable { onSearchQueryChange("") }
+                        )
+                    }
+                }
+            }
+
+            // Filter / Sort toggle button
+            Box(
+                Modifier.size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (showPanel || isFilterActive) Yellow else colors.surface)
+                    .border(3.dp, colors.border, RoundedCornerShape(12.dp))
+                    .clickable { showPanel = !showPanel },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Tune,
+                    contentDescription = "Filter and Sort",
+                    tint = if (showPanel || isFilterActive) Ink else colors.textPrimary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+
+        // Animated options panel
+        AnimatedVisibility(
+            visible = showPanel,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Filter row
+                    Column {
+                        Text(
+                            "FILTER NETWORKS",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = colors.textSecondary,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip("ALL", filter == VaultFilter.ALL, Modifier.weight(1f)) {
+                                onFilterChange(VaultFilter.ALL)
+                            }
+                            FilterChip("OPEN", filter == VaultFilter.OPEN, Modifier.weight(1f)) {
+                                onFilterChange(VaultFilter.OPEN)
+                            }
+                            FilterChip("SECURED", filter == VaultFilter.SECURED, Modifier.weight(1f)) {
+                                onFilterChange(VaultFilter.SECURED)
+                            }
+                        }
+                    }
+
+                    // Sort row
+                    Column {
+                        Text(
+                            "SORT ORDER",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = colors.textSecondary,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip("RECENT", sort == VaultSort.RECENTLY_ADDED, Modifier.weight(1f)) {
+                                onSortChange(VaultSort.RECENTLY_ADDED)
+                            }
+                            FilterChip("UPDATED", sort == VaultSort.RECENTLY_UPDATED, Modifier.weight(1f)) {
+                                onSortChange(VaultSort.RECENTLY_UPDATED)
+                            }
+                            FilterChip("A → Z", sort == VaultSort.NAME_AZ, Modifier.weight(1f)) {
+                                onSortChange(VaultSort.NAME_AZ)
+                            }
+                            FilterChip("Z → A", sort == VaultSort.NAME_ZA, Modifier.weight(1f)) {
+                                onSortChange(VaultSort.NAME_ZA)
+                            }
+                        }
+                    }
+
+                    if (isFilterActive || searchQuery.isNotEmpty()) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Text(
+                                "RESET ALL",
+                                color = Red,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        onClearFilters()
+                                        onSortChange(VaultSort.NAME_AZ)
+                                    }
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    val bg = if (selected) Yellow else colors.surfaceVariant
+    val fg = if (selected) Ink else colors.textPrimary
+    val border = if (selected) colors.border else colors.border.copy(alpha = 0.45f)
+
+    Box(
+        modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .border(2.dp, border, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            color = fg,
+            fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
+            fontSize = 11.sp
+        )
+    }
+}
+
+@Composable
+private fun FilteredEmptyState(query: String, onClear: () -> Unit) {
+    val colors = RewifiTheme.colors
+    BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(24.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                Modifier.size(60.dp).clip(CircleShape).background(colors.surfaceVariant)
+                    .border(3.dp, colors.border, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.SearchOff, null, tint = colors.textPrimary, modifier = Modifier.size(32.dp))
+            }
+            Spacer(Modifier.height(14.dp))
+            Text("NO MATCHING NETWORKS", fontWeight = FontWeight.Black, fontSize = 16.sp, color = colors.textPrimary)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (query.isNotBlank()) "No networks match “$query” with the active filters."
+                else "No networks match the active filters.",
+                color = colors.textSecondary,
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(16.dp))
+            BrutalButton(
+                "CLEAR FILTERS",
+                modifier = Modifier.fillMaxWidth(0.75f),
+                bg = Yellow,
+                fg = Ink,
+                onClick = onClear
+            )
+        }
+    }
+}
+
 /** Full-screen "Syncing… / Synced" feedback for the manual sync button. */
 @Composable
 private fun SyncOverlay(state: SyncState) {
@@ -140,8 +444,7 @@ private fun SyncOverlay(state: SyncState) {
         BrutalCard(bg = colors.surface, padding = PaddingValues(32.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 when (state) {
-                    SyncState.SYNCING ->
-                        CircularProgressIndicator(color = Yellow, strokeWidth = 5.dp)
+                    SyncState.SYNCING -> CircularProgressIndicator(color = Yellow, strokeWidth = 5.dp)
                     SyncState.SYNCED -> StatusBubble(Icons.Default.Check, Green, Ink)
                     SyncState.FAILED -> StatusBubble(Icons.Default.Close, Red, Snow)
                     SyncState.IDLE -> {}
@@ -227,7 +530,14 @@ private fun SquareButton(
 }
 
 @Composable
-private fun Header(count: Int, onBackup: () -> Unit, onSettings: () -> Unit, onSync: () -> Unit) {
+private fun Header(
+    totalCount: Int,
+    filteredCount: Int,
+    isFiltered: Boolean,
+    onBackup: () -> Unit,
+    onSettings: () -> Unit,
+    onSync: () -> Unit
+) {
     val colors = RewifiTheme.colors
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -248,8 +558,12 @@ private fun Header(count: Int, onBackup: () -> Unit, onSettings: () -> Unit, onS
         Text("YOUR\nWIFI VAULT", fontWeight = FontWeight.Black, fontSize = 38.sp,
             color = colors.textPrimary, lineHeight = 40.sp)
         Spacer(Modifier.height(6.dp))
-        Text("$count saved network${if (count == 1) "" else "s"} · encrypted",
-            color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+        val countText = if (isFiltered) {
+            "Showing $filteredCount of $totalCount saved network${if (totalCount == 1) "" else "s"}"
+        } else {
+            "$totalCount saved network${if (totalCount == 1) "" else "s"} · encrypted"
+        }
+        Text(countText, color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 13.sp)
         Spacer(Modifier.height(4.dp))
     }
 }
@@ -293,3 +607,4 @@ private fun EmptyState() {
         }
     }
 }
+

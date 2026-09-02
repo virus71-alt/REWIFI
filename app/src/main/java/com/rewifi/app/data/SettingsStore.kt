@@ -44,6 +44,24 @@ data class BackupHealthInfo(
     val driveEmail: String?
 )
 
+enum class ReminderType {
+    EMERGENCY_PENDING_CHANGES,
+    NEVER_BACKED_UP,
+    BACKUP_FAILED,
+    DRIVE_DISCONNECTED,
+    BACKUP_STALE,
+    AUTO_BACKUP_OFF
+}
+
+data class BackupReminderState(
+    val type: ReminderType,
+    val title: String,
+    val subtitle: String,
+    val actionText: String,
+    val isEmergency: Boolean = false,
+    val priority: Int
+)
+
 /**
  * Tiny SharedPreferences-backed settings, surfaced as [StateFlow]s so Compose
  * re-reads them reactively. Everything defaults to off — the app lock is fully
@@ -156,6 +174,27 @@ class SettingsStore(context: Context) {
 
     private val _backupHistory = MutableStateFlow(loadBackupHistory())
     val backupHistory: StateFlow<List<BackupHistoryItem>> = _backupHistory.asStateFlow()
+
+    private val _vaultChangeCounter = MutableStateFlow(prefs.getInt(KEY_VAULT_CHANGE_COUNTER, 0))
+    val vaultChangeCounter: StateFlow<Int> = _vaultChangeCounter.asStateFlow()
+
+    private val _lastBackedUpChangeCounter = MutableStateFlow(prefs.getInt(KEY_LAST_BACKED_UP_CHANGE_COUNTER, 0))
+    val lastBackedUpChangeCounter: StateFlow<Int> = _lastBackedUpChangeCounter.asStateFlow()
+
+    private val _backupRemindersEnabled = MutableStateFlow(prefs.getBoolean(KEY_BACKUP_REMINDERS_ENABLED, true))
+    val backupRemindersEnabled: StateFlow<Boolean> = _backupRemindersEnabled.asStateFlow()
+
+    private val _backupNotificationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_BACKUP_NOTIFICATIONS_ENABLED, true))
+    val backupNotificationsEnabled: StateFlow<Boolean> = _backupNotificationsEnabled.asStateFlow()
+
+    private val _backupReminderSnoozedUntil = MutableStateFlow(prefs.getLong(KEY_BACKUP_REMINDER_SNOOZED_UNTIL, 0L))
+    val backupReminderSnoozedUntil: StateFlow<Long> = _backupReminderSnoozedUntil.asStateFlow()
+
+    private val _backupReminderSnoozedPriority = MutableStateFlow(prefs.getInt(KEY_BACKUP_REMINDER_SNOOZED_PRIORITY, 0))
+    val backupReminderSnoozedPriority: StateFlow<Int> = _backupReminderSnoozedPriority.asStateFlow()
+
+    private val _lastBackupReminderNotificationAt = MutableStateFlow(prefs.getLong(KEY_LAST_BACKUP_REMINDER_NOTIFICATION_AT, 0L))
+    val lastBackupReminderNotificationAt: StateFlow<Long> = _lastBackupReminderNotificationAt.asStateFlow()
 
     private fun loadInitialLockType(): AppLockType {
         val stored = prefs.getString(KEY_APP_LOCK_TYPE, null)
@@ -522,6 +561,7 @@ class SettingsStore(context: Context) {
         val currentHistory = _backupHistory.value.toMutableList()
         currentHistory.add(0, BackupHistoryItem(timestamp, trigger, true))
         saveBackupHistory(currentHistory)
+        resetPendingChanges()
     }
 
     fun recordBackupFailure(trigger: String, reason: String, timestamp: Long = System.currentTimeMillis()) {
@@ -570,11 +610,145 @@ class SettingsStore(context: Context) {
         )
     }
 
+    fun incrementVaultChanges() {
+        val next = _vaultChangeCounter.value + 1
+        prefs.edit { putInt(KEY_VAULT_CHANGE_COUNTER, next) }
+        _vaultChangeCounter.value = next
+    }
+
+    fun resetPendingChanges() {
+        val current = _vaultChangeCounter.value
+        prefs.edit { putInt(KEY_LAST_BACKED_UP_CHANGE_COUNTER, current) }
+        _lastBackedUpChangeCounter.value = current
+    }
+
+    fun setBackupRemindersEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_BACKUP_REMINDERS_ENABLED, enabled) }
+        _backupRemindersEnabled.value = enabled
+    }
+
+    fun setBackupNotificationsEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_BACKUP_NOTIFICATIONS_ENABLED, enabled) }
+        _backupNotificationsEnabled.value = enabled
+    }
+
+    fun snoozeReminder(durationMs: Long, priority: Int) {
+        val until = System.currentTimeMillis() + durationMs
+        prefs.edit {
+            putLong(KEY_BACKUP_REMINDER_SNOOZED_UNTIL, until)
+            putInt(KEY_BACKUP_REMINDER_SNOOZED_PRIORITY, priority)
+        }
+        _backupReminderSnoozedUntil.value = until
+        _backupReminderSnoozedPriority.value = priority
+    }
+
+    fun resetReminderSnooze() {
+        prefs.edit {
+            remove(KEY_BACKUP_REMINDER_SNOOZED_UNTIL)
+            remove(KEY_BACKUP_REMINDER_SNOOZED_PRIORITY)
+        }
+        _backupReminderSnoozedUntil.value = 0L
+        _backupReminderSnoozedPriority.value = 0
+    }
+
+    fun setLastBackupReminderNotificationAt(timestamp: Long = System.currentTimeMillis()) {
+        prefs.edit { putLong(KEY_LAST_BACKUP_REMINDER_NOTIFICATION_AT, timestamp) }
+        _lastBackupReminderNotificationAt.value = timestamp
+    }
+
+    fun computeBackupReminder(vaultCount: Int): BackupReminderState? {
+        if (!_backupRemindersEnabled.value) return null
+        if (vaultCount <= 0) return null
+
+        val health = computeBackupHealth()
+        val pendingChanges = (_vaultChangeCounter.value - _lastBackedUpChangeCounter.value).coerceAtLeast(0)
+        val now = System.currentTimeMillis()
+        val snoozedUntil = _backupReminderSnoozedUntil.value
+        val snoozedPriority = _backupReminderSnoozedPriority.value
+        val isSnoozed = now < snoozedUntil
+
+        val candidate: BackupReminderState? = when {
+            pendingChanges >= PENDING_CHANGES_EMERGENCY_THRESHOLD -> {
+                BackupReminderState(
+                    type = ReminderType.EMERGENCY_PENDING_CHANGES,
+                    title = "$pendingChanges VAULT CHANGES NOT BACKED UP",
+                    subtitle = "New or modified networks are only stored locally on this device.",
+                    actionText = "BACK UP NOW",
+                    isEmergency = true,
+                    priority = 6
+                )
+            }
+            health.status == BackupHealthStatus.NEVER_BACKED_UP -> {
+                BackupReminderState(
+                    type = ReminderType.NEVER_BACKED_UP,
+                    title = "YOUR VAULT IS NOT BACKED UP",
+                    subtitle = "Connect Google Drive or create a cloud backup to avoid losing your WiFi credentials.",
+                    actionText = "BACK UP NOW",
+                    isEmergency = false,
+                    priority = 5
+                )
+            }
+            health.status == BackupHealthStatus.BACKUP_FAILED -> {
+                BackupReminderState(
+                    type = ReminderType.BACKUP_FAILED,
+                    title = "LAST BACKUP FAILED",
+                    subtitle = health.failureReason ?: "Could not upload the latest vault backup.",
+                    actionText = "RETRY",
+                    isEmergency = true,
+                    priority = 4
+                )
+            }
+            health.status == BackupHealthStatus.DRIVE_NOT_CONNECTED -> {
+                BackupReminderState(
+                    type = ReminderType.DRIVE_DISCONNECTED,
+                    title = "CLOUD BACKUP DISCONNECTED",
+                    subtitle = "Sign in with Google Drive to keep your vault continuously protected.",
+                    actionText = "CONNECT",
+                    isEmergency = false,
+                    priority = 3
+                )
+            }
+            health.status == BackupHealthStatus.BACKUP_DUE -> {
+                val diff = now - health.lastSuccessfulAt
+                val days = (diff / 86400000L).coerceAtLeast(1L)
+                BackupReminderState(
+                    type = ReminderType.BACKUP_STALE,
+                    title = "BACKUP IS $days DAY${if (days == 1L) "" else "S"} OLD",
+                    subtitle = "Your cloud backup has not updated recently.",
+                    actionText = "BACK UP NOW",
+                    isEmergency = false,
+                    priority = 2
+                )
+            }
+            health.status == BackupHealthStatus.AUTO_BACKUP_OFF -> {
+                BackupReminderState(
+                    type = ReminderType.AUTO_BACKUP_OFF,
+                    title = "AUTO BACKUP IS OFF",
+                    subtitle = "Automatic daily backups are disabled in Settings.",
+                    actionText = "VIEW BACKUP",
+                    isEmergency = false,
+                    priority = 1
+                )
+            }
+            else -> null
+        }
+
+        if (candidate == null) return null
+
+        // If snoozed, candidate only shows if candidate.priority > snoozedPriority (materially worsened risk)
+        if (isSnoozed && candidate.priority <= snoozedPriority) {
+            return null
+        }
+
+        return candidate
+    }
+
     companion object {
         val BUILTIN_CATEGORIES = listOf("Home", "Work", "Cafe", "Hotel", "Friends", "Other")
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
         const val STALE_BACKUP_THRESHOLD_MS = 48 * 60 * 60 * 1000L // 48 hours
+        const val PENDING_CHANGES_EMERGENCY_THRESHOLD = 5
         private const val KEY_APP_THEME = "app_theme"
         private const val KEY_VAULT_SORT = "vault_sort"
         private const val KEY_VAULT_FILTER = "vault_filter"
@@ -606,5 +780,12 @@ class SettingsStore(context: Context) {
         private const val KEY_LAST_BACKUP_FAILURE_REASON = "last_backup_failure_reason"
         private const val KEY_LAST_BACKUP_TRIGGER = "last_backup_trigger"
         private const val KEY_BACKUP_HISTORY = "backup_history_json"
+        private const val KEY_VAULT_CHANGE_COUNTER = "vault_change_counter"
+        private const val KEY_LAST_BACKED_UP_CHANGE_COUNTER = "last_backed_up_change_counter"
+        private const val KEY_BACKUP_REMINDERS_ENABLED = "backup_reminders_enabled"
+        private const val KEY_BACKUP_NOTIFICATIONS_ENABLED = "backup_notifications_enabled"
+        private const val KEY_BACKUP_REMINDER_SNOOZED_UNTIL = "backup_reminder_snoozed_until"
+        private const val KEY_BACKUP_REMINDER_SNOOZED_PRIORITY = "backup_reminder_snoozed_priority"
+        private const val KEY_LAST_BACKUP_REMINDER_NOTIFICATION_AT = "last_backup_reminder_notification_at"
     }
 }

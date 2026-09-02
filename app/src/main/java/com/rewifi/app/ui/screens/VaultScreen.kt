@@ -51,7 +51,9 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -73,6 +75,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rewifi.app.data.BackupReminderState
+import com.rewifi.app.data.ReminderType
 import com.rewifi.app.data.WifiCred
 import com.rewifi.app.ui.components.BrutalButton
 import com.rewifi.app.ui.components.BrutalCard
@@ -123,9 +127,14 @@ fun VaultScreen(
     onBulkFavorite: (Boolean) -> Unit = {},
     onBulkCategory: (String) -> Unit = {},
     onBulkDelete: () -> Unit = {},
-    onBulkExport: (String) -> Unit = {}
+    onBulkExport: (String) -> Unit = {},
+    backupReminder: BackupReminderState? = null,
+    isBackingUp: Boolean = false,
+    onBackupNow: () -> Unit = {},
+    onSnoozeReminder: (durationMs: Long, priority: Int) -> Unit = { _, _ -> }
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
+    var showSnoozeDialog by remember { mutableStateOf(false) }
     val colors = RewifiTheme.colors
     val isSelectionMode = selectedIds.isNotEmpty()
     var showCategoryDialog by remember { mutableStateOf(false) }
@@ -166,6 +175,19 @@ fun VaultScreen(
                         onBackup = onBackup,
                         onSettings = onSettings,
                         onSync = onSync
+                    )
+                }
+            }
+
+            // Backup Warning Banner (if eligible and not in selection mode)
+            if (!isSelectionMode && backupReminder != null) {
+                item {
+                    BackupReminderBanner(
+                        reminder = backupReminder,
+                        isBackingUp = isBackingUp,
+                        onBackupNow = onBackupNow,
+                        onLater = { showSnoozeDialog = true },
+                        onViewBackup = onBackup
                     )
                 }
             }
@@ -311,6 +333,17 @@ fun VaultScreen(
                     }
                 }
             }
+        }
+
+        if (showSnoozeDialog && backupReminder != null) {
+            ReminderSnoozeDialog(
+                priority = backupReminder.priority,
+                onDismiss = { showSnoozeDialog = false },
+                onSnooze = { durationMs, priority ->
+                    showSnoozeDialog = false
+                    onSnoozeReminder(durationMs, priority)
+                }
+            )
         }
     }
 }
@@ -1417,5 +1450,204 @@ private fun RecentNetworksSection(
         }
     }
 }
+
+@Composable
+private fun BackupReminderBanner(
+    reminder: BackupReminderState,
+    isBackingUp: Boolean,
+    onBackupNow: () -> Unit,
+    onLater: () -> Unit,
+    onViewBackup: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    val isEmergency = reminder.isEmergency
+
+    BrutalCard(
+        modifier = Modifier.fillMaxWidth(),
+        bg = if (isEmergency) Red.copy(alpha = 0.12f) else colors.surface,
+        borderColor = if (isEmergency) Red else colors.border,
+        padding = PaddingValues(14.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isEmergency) Red else Yellow),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (isEmergency) Icons.Default.Warning else Icons.Default.CloudQueue,
+                        contentDescription = null,
+                        tint = if (isEmergency) Snow else Ink,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        reminder.title,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        color = if (isEmergency) Red else colors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Text(
+                        reminder.subtitle,
+                        fontSize = 11.sp,
+                        color = colors.textSecondary,
+                        maxLines = 2,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Primary Action button
+                Box(
+                    Modifier
+                        .weight(1.2f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isEmergency) Red else Yellow)
+                        .border(2.dp, colors.border, RoundedCornerShape(8.dp))
+                        .clickable(enabled = !isBackingUp) {
+                            if (reminder.type == ReminderType.AUTO_BACKUP_OFF || reminder.type == ReminderType.DRIVE_DISCONNECTED) {
+                                onViewBackup()
+                            } else {
+                                onBackupNow()
+                            }
+                        }
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (isBackingUp) "BACKING UP…" else reminder.actionText,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = if (isEmergency) Snow else Ink,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                // Secondary Action: LATER or DETAILS
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.surfaceVariant)
+                        .border(2.dp, colors.border.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .clickable {
+                            if (reminder.type == ReminderType.BACKUP_FAILED) {
+                                onViewBackup()
+                            } else {
+                                onLater()
+                            }
+                        }
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (reminder.type == ReminderType.BACKUP_FAILED) "DETAILS" else "LATER",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderSnoozeDialog(
+    priority: Int,
+    onDismiss: () -> Unit,
+    onSnooze: (durationMs: Long, priority: Int) -> Unit
+) {
+    val colors = RewifiTheme.colors
+    Dialog(onDismissRequest = onDismiss) {
+        BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(20.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "REMIND ME LATER",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    color = colors.textPrimary
+                )
+
+                Text(
+                    "Snooze backup warnings. If your backup risk increases significantly, REWIFI will alert you sooner.",
+                    fontSize = 12.sp,
+                    color = colors.textSecondary,
+                    lineHeight = 16.sp
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SnoozeOptionRow(
+                        label = "REMIND TOMORROW",
+                        sublabel = "24 hours",
+                        onClick = { onSnooze(24 * 60 * 60 * 1000L, priority) }
+                    )
+                    SnoozeOptionRow(
+                        label = "REMIND IN 3 DAYS",
+                        sublabel = "72 hours",
+                        onClick = { onSnooze(3 * 24 * 60 * 60 * 1000L, priority) }
+                    )
+                    SnoozeOptionRow(
+                        label = "REMIND IN 7 DAYS",
+                        sublabel = "1 week",
+                        onClick = { onSnooze(7 * 24 * 60 * 60 * 1000L, priority) }
+                    )
+                }
+
+                BrutalButton(
+                    text = "CANCEL",
+                    modifier = Modifier.fillMaxWidth(),
+                    bg = colors.surface,
+                    fg = colors.textPrimary,
+                    onClick = onDismiss
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SnoozeOptionRow(
+    label: String,
+    sublabel: String,
+    onClick: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.surfaceVariant)
+            .border(1.5.dp, colors.border.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontWeight = FontWeight.Black, fontSize = 12.sp, color = colors.textPrimary)
+        Text(sublabel, fontSize = 11.sp, color = colors.textSecondary, fontWeight = FontWeight.Medium)
+    }
+}
+
 
 

@@ -79,7 +79,13 @@ fun SettingsScreen(
     onOpenBackupSetup: () -> Unit,
     onCreateCategory: (String) -> Boolean,
     onRenameCategory: (String, String) -> Boolean,
-    onDeleteCategory: (String) -> Unit
+    onDeleteCategory: (String) -> Unit,
+    backupRemindersEnabled: Boolean = true,
+    backupNotificationsEnabled: Boolean = true,
+    backupReminderSnoozedUntil: Long = 0L,
+    onToggleBackupReminders: (Boolean) -> Unit = {},
+    onToggleBackupNotifications: (Boolean) -> Unit = {},
+    onResetReminderSnooze: () -> Unit = {}
 ) {
     val colors = RewifiTheme.colors
     var pinDialogMode by remember { mutableStateOf<PinSetupMode?>(null) }
@@ -169,6 +175,15 @@ fun SettingsScreen(
                 subtitle = if (backupConfigured) "Drive connected · manage backup & restore"
                            else "Connect Google Drive to back up automatically",
                 onClick = onOpenBackupSetup
+            )
+
+            BackupRemindersCard(
+                backupRemindersEnabled = backupRemindersEnabled,
+                backupNotificationsEnabled = backupNotificationsEnabled,
+                backupReminderSnoozedUntil = backupReminderSnoozedUntil,
+                onToggleReminders = onToggleBackupReminders,
+                onToggleNotifications = onToggleBackupNotifications,
+                onResetSnooze = onResetReminderSnooze
             )
 
             Spacer(Modifier.height(20.dp))
@@ -872,4 +887,146 @@ private fun CategoryManagementCard(
         }
     }
 }
+
+@Composable
+private fun BackupRemindersCard(
+    backupRemindersEnabled: Boolean,
+    backupNotificationsEnabled: Boolean,
+    backupReminderSnoozedUntil: Long,
+    onToggleReminders: (Boolean) -> Unit,
+    onToggleNotifications: (Boolean) -> Unit,
+    onResetSnooze: () -> Unit
+) {
+    val colors = RewifiTheme.colors
+    val isSnoozed = backupReminderSnoozedUntil > System.currentTimeMillis()
+
+    BrutalCard(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                "BACKUP REMINDERS",
+                fontWeight = FontWeight.Black,
+                fontSize = 14.sp,
+                color = colors.textPrimary,
+                letterSpacing = 0.5.sp
+            )
+
+            // In-app reminders toggle
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        "IN-APP REMINDERS",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        "Show warning banners when vault is at risk",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (backupRemindersEnabled) Green else colors.surface)
+                        .border(2.dp, colors.border, RoundedCornerShape(8.dp))
+                        .clickable { onToggleReminders(!backupRemindersEnabled) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (backupRemindersEnabled) "ON" else "OFF",
+                        color = if (backupRemindersEnabled) Ink else colors.textSecondary,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            // Android notifications toggle
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        "NOTIFICATIONS",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        "Periodic safe background notifications when overdue",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (backupNotificationsEnabled) Green else colors.surface)
+                        .border(2.dp, colors.border, RoundedCornerShape(8.dp))
+                        .clickable { onToggleNotifications(!backupNotificationsEnabled) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (backupNotificationsEnabled) "ON" else "OFF",
+                        color = if (backupNotificationsEnabled) Ink else colors.textSecondary,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            // Snooze status row
+            if (isSnoozed) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Yellow.copy(alpha = 0.2f))
+                        .border(1.5.dp, colors.border, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "REMINDERS SNOOZED",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = colors.textPrimary
+                        )
+                        Text(
+                            "Until " + java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(backupReminderSnoozedUntil)),
+                            fontSize = 10.sp,
+                            color = colors.textSecondary
+                        )
+                    }
+
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Yellow)
+                            .border(1.5.dp, colors.border, RoundedCornerShape(6.dp))
+                            .clickable(onClick = onResetSnooze)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("RESET", fontWeight = FontWeight.Black, fontSize = 10.sp, color = Ink)
+                    }
+                }
+            }
+        }
+    }
+}
+
 

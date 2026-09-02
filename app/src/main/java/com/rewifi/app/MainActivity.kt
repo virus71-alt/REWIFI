@@ -59,6 +59,7 @@ import com.rewifi.app.ui.screens.VaultScreen
 import com.rewifi.app.ui.theme.Paper
 import com.rewifi.app.ui.theme.RewifiTheme
 import com.rewifi.app.vault.BiometricLock
+import com.rewifi.app.vault.SyncState
 import com.rewifi.app.vault.VaultViewModel
 import java.io.File
 
@@ -568,6 +569,23 @@ class MainActivity : FragmentActivity() {
                     val customCategories by vm.customCategories.collectAsState()
                     val selectedIds by vm.selectedIds.collectAsState()
 
+                    val backupReminder = remember(
+                        creds.size,
+                        settings.lastBackupAt.collectAsState().value,
+                        settings.lastBackupAttemptAt.collectAsState().value,
+                        settings.lastBackupSuccess.collectAsState().value,
+                        settings.lastBackupFailureReason.collectAsState().value,
+                        settings.vaultChangeCounter.collectAsState().value,
+                        settings.lastBackedUpChangeCounter.collectAsState().value,
+                        settings.backupRemindersEnabled.collectAsState().value,
+                        settings.backupReminderSnoozedUntil.collectAsState().value,
+                        settings.backupReminderSnoozedPriority.collectAsState().value,
+                        settings.driveEmail.collectAsState().value,
+                        settings.autoBackupEnabled.collectAsState().value
+                    ) {
+                        settings.computeBackupReminder(creds.size)
+                    }
+
                     VaultScreen(
                         creds = filteredCreds,
                         totalCount = creds.size,
@@ -615,6 +633,19 @@ class MainActivity : FragmentActivity() {
                             } else {
                                 vm.triggerSync()
                             }
+                        },
+                        backupReminder = backupReminder,
+                        isBackingUp = (syncState == SyncState.SYNCING),
+                        onBackupNow = {
+                            if (settings.driveEmail.value == null) {
+                                navTo(Screen.Backup)
+                            } else {
+                                vm.triggerSync()
+                            }
+                        },
+                        onSnoozeReminder = { durationMs, priority ->
+                            settings.snoozeReminder(durationMs, priority)
+                            Toast.makeText(this@MainActivity, "Reminder snoozed", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
@@ -759,7 +790,13 @@ class MainActivity : FragmentActivity() {
 
                         onDeleteCategory = { cat: String ->
                             vm.deleteCategory(cat)
-                        }
+                        },
+                        backupRemindersEnabled = settings.backupRemindersEnabled.collectAsState().value,
+                        backupNotificationsEnabled = settings.backupNotificationsEnabled.collectAsState().value,
+                        backupReminderSnoozedUntil = settings.backupReminderSnoozedUntil.collectAsState().value,
+                        onToggleBackupReminders = { settings.setBackupRemindersEnabled(it) },
+                        onToggleBackupNotifications = { settings.setBackupNotificationsEnabled(it) },
+                        onResetReminderSnooze = { settings.resetReminderSnooze() }
                     )
                 }
 

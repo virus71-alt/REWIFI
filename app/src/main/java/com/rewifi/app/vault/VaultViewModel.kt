@@ -87,12 +87,15 @@ class VaultViewModel(
     }
 
     fun addCategory(name: String): Boolean {
-        return settings.addCustomCategory(name)
+        val ok = settings.addCustomCategory(name)
+        if (ok) settings.incrementVaultChanges()
+        return ok
     }
 
     fun renameCategory(oldName: String, newName: String): Boolean {
         val ok = settings.renameCustomCategory(oldName, newName)
         if (ok) {
+            settings.incrementVaultChanges()
             viewModelScope.launch {
                 repo.renameCategory(oldName, newName.trim())
             }
@@ -102,6 +105,7 @@ class VaultViewModel(
 
     fun deleteCategory(name: String) {
         settings.deleteCustomCategory(name)
+        settings.incrementVaultChanges()
         viewModelScope.launch {
             repo.reassignCategoryToOther(name)
         }
@@ -131,6 +135,7 @@ class VaultViewModel(
         if (ids.isEmpty()) return
         val count = ids.size
         viewModelScope.launch {
+            settings.incrementVaultChanges()
             repo.setFavoriteBulk(ids, isFavorite)
             showFlash(if (isFavorite) "Pinned $count network${if (count == 1) "" else "s"}" else "Unpinned $count network${if (count == 1) "" else "s"}", ok = true)
             clearSelection()
@@ -144,6 +149,7 @@ class VaultViewModel(
         if (ids.isEmpty()) return
         val count = ids.size
         viewModelScope.launch {
+            settings.incrementVaultChanges()
             repo.setCategoryBulk(ids, category)
             showFlash("Moved $count network${if (count == 1) "" else "s"} to $category", ok = true)
             clearSelection()
@@ -157,6 +163,7 @@ class VaultViewModel(
         if (ids.isEmpty()) return
         val count = ids.size
         viewModelScope.launch {
+            settings.incrementVaultChanges()
             repo.deleteBulk(ids)
             showFlash("Deleted $count network${if (count == 1) "" else "s"}", ok = true)
             clearSelection()
@@ -175,18 +182,21 @@ class VaultViewModel(
         if (id != 0L) {
             settings.recordUpdated(id, System.currentTimeMillis())
         }
+        settings.incrementVaultChanges()
         autoBackupIfEnabled()
         driveSyncIfEnabled()
     }
 
     fun delete(id: Long) = viewModelScope.launch {
         repo.delete(id)
+        settings.incrementVaultChanges()
         autoBackupIfEnabled()
         driveSyncIfEnabled()
     }
 
     fun toggleFavorite(id: Long, isFavorite: Boolean) = viewModelScope.launch {
         repo.setFavorite(id, isFavorite)
+        settings.incrementVaultChanges()
         autoBackupIfEnabled()
         driveSyncIfEnabled()
     }
@@ -220,6 +230,7 @@ class VaultViewModel(
     ) = viewModelScope.launch {
         repo.updateExisting(targetId, newPassword, newNote, newCategory)
         settings.recordUpdated(targetId, System.currentTimeMillis())
+        settings.incrementVaultChanges()
         autoBackupIfEnabled()
         driveSyncIfEnabled()
         onDone()
@@ -229,6 +240,9 @@ class VaultViewModel(
     fun saveScanned(ssid: String, password: String, onDone: (added: Boolean) -> Unit = {}) =
         viewModelScope.launch {
             val added = repo.addIfNew(ssid, password)
+            if (added) {
+                settings.incrementVaultChanges()
+            }
             autoBackupIfEnabled()
             driveSyncIfEnabled()
             onDone(added)
